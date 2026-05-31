@@ -16,6 +16,11 @@ export type KeyScopeV2 =
   | 'kb.write'
   | 'account.read'
   | 'usage.read'
+  // v0.61.0
+  | 'collection.read'
+  | 'collection.write'
+  | 'collection.delete'
+  | 'episode.write'
 
 /** GET /v1/auth/me 响应 */
 export interface User {
@@ -93,6 +98,166 @@ export interface ImageListParams {
   pageSize?: number
   isPublic?: boolean
   tag?: string
+}
+
+// ─── v0.61.0 Collections（合集）类型 ───────────────────────────────
+
+/** 10 个内置合集类型 + 自定义。 */
+export type CollectionType =
+  | 'knowledge_base'
+  | 'aigc'
+  | 'comic'
+  | 'audio_drama'
+  | 'photo_album'
+  | 'album'
+  | 'comic_drama'
+  | 'movie'
+  | 'tv_series'
+  | 'custom'
+
+/** 4 个内置资源类型。 */
+export type CollectionResourceType = 'doc' | 'image' | 'video' | 'audio'
+
+/** GET /v1/collections / GET /v1/collections/:id 单条记录。 */
+export interface Collection {
+  id: string
+  name: string
+  slug: string
+  collectionType: CollectionType
+  allowedResourceTypes: CollectionResourceType[]
+  customTypeId: string | null
+  /** v0.38 语义保留（creator/output）。 */
+  kbType: 'creator' | 'output'
+  description: string | null
+  docCount: number
+  sizeBytes: number
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface CollectionListParams {
+  cursor?: string
+  limit?: number
+  sort?: 'updated_at' | 'name'
+  type?: CollectionType | 'all'
+  kbType?: 'all' | 'creator' | 'output'
+  includeDeleted?: boolean
+}
+
+export interface CreateCollectionInput {
+  name: string
+  slug?: string
+  description?: string
+  collectionType?: CollectionType
+  allowedResourceTypes?: CollectionResourceType[]
+  customTypeId?: string
+  kbType?: 'creator' | 'output'
+}
+
+export interface UpdateCollectionInput {
+  name?: string
+  description?: string
+  isDefault?: boolean
+  /** 仅可扩，不可缩（服务端拒绝缩减）。 */
+  allowedResourceTypes?: CollectionResourceType[]
+}
+
+export interface CollectionType_Item {
+  id: string
+  ownerId: string | null
+  name: string
+  slug: string
+  allowedResourceTypes: CollectionResourceType[]
+  icon: string | null
+  description: string | null
+  sortOrder: number
+  isBuiltin: boolean
+  createdAt: string
+}
+
+export interface CreateCollectionTypeInput {
+  name: string
+  slug: string
+  allowedResourceTypes: CollectionResourceType[]
+  icon?: string
+  description?: string
+}
+
+// ─── v0.61.1 Episodes（剧集）类型 ───────────────────────────────────
+
+export type EpisodeStatus = 'draft' | 'generating' | 'ready' | 'published' | 'archived'
+
+export interface Episode {
+  id: string
+  collectionId: string
+  sequenceNo: number
+  title: string
+  description: string | null
+  status: EpisodeStatus
+  coverImageId: string | null
+  assetCount: number
+  sizeBytes: number
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface EpisodeListParams {
+  cursor?: string
+  limit?: number
+  status?: EpisodeStatus | 'all'
+  includeDeleted?: boolean
+}
+
+export interface CreateEpisodeInput {
+  sequenceNo: number
+  title: string
+  description?: string
+  coverImageId?: string
+  status?: EpisodeStatus
+}
+
+export interface UpdateEpisodeInput {
+  sequenceNo?: number
+  title?: string
+  description?: string
+  coverImageId?: string
+  status?: EpisodeStatus
+}
+
+// ─── v0.61.2 episode.sync（第三方 AI 视频接入主链路）─────────────
+
+export interface EpisodeSyncAssetRef {
+  resourceType: CollectionResourceType
+  resourceId: string
+  sourceHash?: string
+  metadata?: Record<string, string | number | boolean>
+}
+
+export interface EpisodeSyncInput {
+  /** 客户端幂等键（建议 `${clientId}-${batchId}` 或 nanoid）。同 owner 下 24 小时内重发返回首次响应。 */
+  idempotencyKey?: string
+  assets: EpisodeSyncAssetRef[]
+}
+
+export interface EpisodeSyncApplied {
+  resourceType: CollectionResourceType
+  resourceId: string
+  status: 'applied' | 'skipped_duplicate' | 'failed'
+  reason?: string
+}
+
+export interface EpisodeSyncResult {
+  episodeId: string
+  collectionId: string
+  applied: EpisodeSyncApplied[]
+  appliedCount: number
+  skippedCount: number
+  failedCount: number
+  totalCount: number
+  syncedAt: string
 }
 
 /** RateLimit-* 头解析结果 */

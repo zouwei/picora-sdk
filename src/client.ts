@@ -5,10 +5,22 @@ import {
 } from './errors'
 import type {
   AuthorizedApp,
+  Collection,
+  CollectionListParams,
+  CollectionType_Item,
+  CreateCollectionInput,
+  CreateCollectionTypeInput,
+  CreateEpisodeInput,
+  Episode,
+  EpisodeListParams,
+  EpisodeSyncInput,
+  EpisodeSyncResult,
   Image,
   ImageListParams,
   PaginatedResponse,
   Subscription,
+  UpdateCollectionInput,
+  UpdateEpisodeInput,
   User,
 } from './types'
 
@@ -57,7 +69,7 @@ export interface PicoraClientOptions {
   debug?: boolean
 }
 
-const SDK_VERSION = '0.1.0'
+const SDK_VERSION = '0.2.0'   // v0.61.4：新增 collections / collectionTypes / episodes 命名空间
 const DEFAULT_BASE_URL = 'https://api.picora.me'
 const DEFAULT_TIMEOUT_MS = 30_000
 const RATE_LIMIT_BACKOFF_MS = [1_000, 2_000, 4_000] as const
@@ -255,6 +267,37 @@ export interface PicoraClient {
     list(): Promise<AuthorizedApp[]>
     revoke(clientId: string): Promise<void>
   }
+  /** v0.61.0：合集（Collections）— 多媒体内容容器。 */
+  readonly collections: {
+    list(params?: CollectionListParams): Promise<PaginatedResponse<Collection>>
+    get(id: string): Promise<Collection>
+    create(input: CreateCollectionInput): Promise<Collection>
+    update(id: string, patch: UpdateCollectionInput): Promise<Collection>
+    delete(id: string, opts?: { cascade?: boolean }): Promise<void>
+  }
+  /** v0.61.0：合集类型字典（内置 + 用户自定义）。 */
+  readonly collectionTypes: {
+    list(): Promise<CollectionType_Item[]>
+    create(input: CreateCollectionTypeInput): Promise<CollectionType_Item>
+    delete(id: string): Promise<void>
+  }
+  /** v0.61.1：剧集 CRUD + episode.sync 第三方接入主链路。 */
+  readonly episodes: {
+    list(collectionId: string, params?: EpisodeListParams): Promise<PaginatedResponse<Episode>>
+    get(collectionId: string, id: string): Promise<Episode>
+    create(collectionId: string, input: CreateEpisodeInput): Promise<Episode>
+    update(collectionId: string, id: string, patch: UpdateEpisodeInput): Promise<Episode>
+    delete(collectionId: string, id: string): Promise<void>
+    /**
+     * 按剧集同步资产（第三方 AI 视频生成软件主入口）。
+     *
+     * 行为：
+     *   - 自动 Idempotency-Key（如未传入则用 input.idempotencyKey；都未提供则单次不去重）
+     *   - 返回 applied[] 含每个 asset 的 applied / skipped_duplicate / failed 三态
+     *   - 服务端写入 collection_episode_assets 关联 + sys_audit_logs 审计
+     */
+    sync(collectionId: string, episodeId: string, input: EpisodeSyncInput): Promise<EpisodeSyncResult>
+  }
 }
 
 export function createPicoraClient(options: PicoraClientOptions): PicoraClient {
@@ -284,6 +327,101 @@ export function createPicoraClient(options: PicoraClientOptions): PicoraClient {
       revoke: async (clientId) => {
         await execute<void>(cfg, { method: 'DELETE', path: `/v1/me/apps/${encodeURIComponent(clientId)}` })
       },
+    },
+    collections: {
+      list: (params) => {
+        const query: Record<string, string | number | boolean | undefined> = {}
+        if (params?.cursor !== undefined) query['cursor'] = params.cursor
+        if (params?.limit !== undefined) query['limit'] = params.limit
+        if (params?.sort !== undefined) query['sort'] = params.sort
+        if (params?.type !== undefined && params.type !== 'all') query['type'] = params.type
+        if (params?.kbType !== undefined && params.kbType !== 'all') query['kbType'] = params.kbType
+        if (params?.includeDeleted) query['includeDeleted'] = 'true'
+        return execute<PaginatedResponse<Collection>>(cfg, { method: 'GET', path: '/v1/collections', query })
+      },
+      get: (id) => execute<Collection>(cfg, { method: 'GET', path: `/v1/collections/${encodeURIComponent(id)}` }),
+      create: (input) =>
+        execute<Collection>(cfg, { method: 'POST', path: '/v1/collections', body: input }),
+      update: (id, patch) =>
+        execute<Collection>(cfg, {
+          method: 'PATCH',
+          path: `/v1/collections/${encodeURIComponent(id)}`,
+          body: patch,
+        }),
+      delete: async (id, opts) => {
+        const baseArgs = {
+          method: 'DELETE' as const,
+          path: `/v1/collections/${encodeURIComponent(id)}`,
+        }
+        await execute<void>(cfg, opts?.cascade
+          ? { ...baseArgs, query: { cascade: 'true' } }
+          : baseArgs)
+      },
+    },
+    collectionTypes: {
+      list: async () => {
+        const result = await execute<{ items: CollectionType_Item[] } | CollectionType_Item[]>(
+          cfg,
+          { method: 'GET', path: '/v1/collection-types' },
+        )
+        // 服务端响应形态 { items: [...] }；data 已被 execute() 拆封，这里再 normalize 一次保护
+        if (Array.isArray(result)) return result
+        if (result && typeof result === 'object' && 'items' in result) {
+          return (result as { items: CollectionType_Item[] }).items
+        }
+        return []
+      },
+      create: (input) =>
+        execute<CollectionType_Item>(cfg, { method: 'POST', path: '/v1/collection-types', body: input }),
+      delete: async (id) => {
+        await execute<void>(cfg, {
+          method: 'DELETE',
+          path: `/v1/collection-types/${encodeURIComponent(id)}`,
+        })
+      },
+    },
+    episodes: {
+      list: (collectionId, params) => {
+        const query: Record<string, string | number | boolean | undefined> = {}
+        if (params?.cursor !== undefined) query['cursor'] = params.cursor
+        if (params?.limit !== undefined) query['limit'] = params.limit
+        if (params?.status !== undefined && params.status !== 'all') query['status'] = params.status
+        if (params?.includeDeleted) query['includeDeleted'] = 'true'
+        return execute<PaginatedResponse<Episode>>(cfg, {
+          method: 'GET',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes`,
+          query,
+        })
+      },
+      get: (collectionId, id) =>
+        execute<Episode>(cfg, {
+          method: 'GET',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes/${encodeURIComponent(id)}`,
+        }),
+      create: (collectionId, input) =>
+        execute<Episode>(cfg, {
+          method: 'POST',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes`,
+          body: input,
+        }),
+      update: (collectionId, id, patch) =>
+        execute<Episode>(cfg, {
+          method: 'PATCH',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes/${encodeURIComponent(id)}`,
+          body: patch,
+        }),
+      delete: async (collectionId, id) => {
+        await execute<void>(cfg, {
+          method: 'DELETE',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes/${encodeURIComponent(id)}`,
+        })
+      },
+      sync: (collectionId, episodeId, input) =>
+        execute<EpisodeSyncResult>(cfg, {
+          method: 'POST',
+          path: `/v1/collections/${encodeURIComponent(collectionId)}/episodes/${encodeURIComponent(episodeId)}/sync`,
+          body: input,
+        }),
     },
   }
 }

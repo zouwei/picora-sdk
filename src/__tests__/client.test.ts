@@ -74,7 +74,7 @@ describe('createPicoraClient — request shaping', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = init.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer sk_live_test')
-    expect(headers['User-Agent']).toBe('MyApp/1.0 @picora/sdk/0.1.0')
+    expect(headers['User-Agent']).toBe('MyApp/1.0 @picora/sdk/0.2.0')
   })
 
   it('builds query string from list params and unwraps {data} envelope', async () => {

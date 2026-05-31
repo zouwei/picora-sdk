@@ -1,6 +1,6 @@
 {
   "name": "@picora/sdk",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Official TypeScript SDK for Picora API (https://api.picora.me)",
   "license": "Apache-2.0",
   "homepage": "https://picora.me/developers",
@@ -16,7 +16,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./errors": "./src/errors.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./node": "./src/node/index.ts"
   },
   "files": ["dist", "src", "README.md", "LICENSE", "NOTICE"],
   "scripts": {
@@ -27,8 +28,17 @@
     "prepack": "pnpm run build"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "keytar": "^7.9.0"
+  },
+  "peerDependenciesMeta": {
+    "keytar": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",
