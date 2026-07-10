@@ -2,8 +2,8 @@
  * `@picora/sdk` 主入口。
  *
  * 设计文档：
- *   - v0.1.0：link-anchor/iterations/v0.31.0-public-openapi-developer-portal.md §4.7
- *   - v0.2.0：link-anchor/iterations/v0.61.0-service-collections.md PR4-A
+ *   - v0.1.0：picora-assets/iterations/v0.31.0-public-openapi-developer-portal.md §4.7
+ *   - v0.2.0：picora-assets/iterations/v0.61.0-service-collections.md PR4-A
  *
  * v0.1.0 范围：fluent client + 错误类层级 + 高频类型（auth / images / apps）。
  * v0.2.0 新增：collections / collectionTypes / episodes 命名空间（含 episode.sync 第三方接入主入口）。
