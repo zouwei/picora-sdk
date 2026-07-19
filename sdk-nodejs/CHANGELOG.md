@@ -2,6 +2,20 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 与 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] — 2026-07-20
+
+跟进 picora-service **v0.80(教学画板 `.boardraw`)** 与 **v0.81(API Key 细粒度 scopes)** 两处契约新增,补齐 SDK 覆盖。vendored 契约 `spec/openapi-public.json` 由 228 → 236 operations,OpenAPI 覆盖率硬门禁重新对齐全量(零欠账)。
+
+### Added
+
+- **`boards` 命名空间**(教学画板 `.boardraw`,Excalidraw 兼容场景 JSON,v0.80.0)—— 7 方法:`create`(上传,受套餐门禁)/ `list`(游标分页,支持 `q` / `tag` / `isPublic` / `sort` 过滤)/ `get`(元数据)/ `getRaw`(场景全文,text 模式直返 JSON 字符串,公开画板免鉴权)/ `update`(title / isPublic / tags)/ `delete`(单删)/ `batchDelete`(1~50 个,返回 deleted/failed);新增类型 `Board` / `BoardListResult` / `BoardListParams` / `CreateBoardInput` / `UpdateBoardInput` / `BoardBatchDeleteResult`
+  - 注:boards 列表响应仅 `{ items, nextCursor }`(不含 media 端点的 `hasMore`),故用专用 `BoardListResult` 而非 `PaginatedResponse`
+- **重新加入 `apiKeys.update`**(`PATCH /v1/api-keys/{id}`)—— picora-service v0.81 起该路由已存在(0.3.0 曾因当时无对应路由删除,见下);支持更新 `name` / `description` / `scopes`(v2 细粒度权限,覆盖式替换,变更后立即清鉴权缓存);新增类型 `UpdateApiKeyInput` / `UpdatedApiKey`(响应含 `description`、不含 `keyPrefix`,与列表项 `ApiKey` 区分)
+
+### Internal
+
+- 测试 266 → 274(新增 boards 8 case + apiKeys.update K3 case);覆盖率门禁 `openapi-coverage.test.ts` 随 236 operations 全量绿
+
 ## [0.3.0] — 2026-07-19
 
 独立仓库首个版本(自 picora-service `packages/sdk` 迁出,git 历史保留);实现公开 Picora API **全量覆盖(228 operations)**,由 OpenAPI 覆盖率 CI 硬门禁保证(v0.82.0 迭代)。仓库为多语言容器,Node.js SDK 位于 `sdk-nodejs/` 子目录。

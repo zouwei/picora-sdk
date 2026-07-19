@@ -12,6 +12,8 @@ import type {
   ApiKeyToolConfigs,
   CreateApiKeyInput,
   CreatedApiKey,
+  UpdateApiKeyInput,
+  UpdatedApiKey,
 } from '../types/index.js'
 
 export interface ApiKeysNamespace {
@@ -25,6 +27,12 @@ export interface ApiKeysNamespace {
   create(input: CreateApiKeyInput): Promise<CreatedApiKey>
   /** 列出当前用户全部 API Key(不含明文;含 keyPrefix、scope/scopesV2 权限、最后使用时间)。 */
   list(): Promise<ApiKey[]>
+  /**
+   * 更新 API Key 元数据(v0.81+):name / description / scopes,至少提供一个字段。
+   * 变更 scopes 会立即清鉴权缓存使新权限生效;name/description 不影响鉴权判定。
+   * 明文 Key 不会返回(更新不涉及明文)。
+   */
+  update(id: string, patch: UpdateApiKeyInput): Promise<UpdatedApiKey>
   /**
    * 吊销并删除 API Key。**立即生效**:写入吊销缓存,后续携带此 Key 的请求一律 401。
    * 操作不可撤销(需重新创建新 Key)。
@@ -46,6 +54,12 @@ export function createApiKeysNamespace(http: HttpCore): ApiKeysNamespace {
         body: { name: input.name },
       }),
     list: () => http.request<ApiKey[]>({ method: 'GET', path: '/v1/api-keys' }),
+    update: (id, patch) =>
+      http.request<UpdatedApiKey>({
+        method: 'PATCH',
+        path: `/v1/api-keys/${encodeURIComponent(id)}`,
+        body: patch,
+      }),
     delete: async (id) => {
       await http.request<void>({
         method: 'DELETE',
@@ -64,6 +78,7 @@ export function createApiKeysNamespace(http: HttpCore): ApiKeysNamespace {
 export const API_KEYS_COVERAGE = [
   { method: 'POST', path: '/v1/api-keys', client: 'apiKeys.create' },
   { method: 'GET', path: '/v1/api-keys', client: 'apiKeys.list' },
+  { method: 'PATCH', path: '/v1/api-keys/{id}', client: 'apiKeys.update' },
   { method: 'DELETE', path: '/v1/api-keys/{id}', client: 'apiKeys.delete' },
   { method: 'GET', path: '/v1/api-keys/{id}/tool-configs', client: 'apiKeys.toolConfigs' },
 ] as const satisfies readonly CoveredOperation[]

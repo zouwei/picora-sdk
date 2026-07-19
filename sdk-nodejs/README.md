@@ -2,7 +2,7 @@
 
 Official TypeScript SDK for [Picora](https://picora.me) — the AI-workflow resource hosting platform (images, videos, audio, Markdown docs & knowledge bases, collections, AIGC pipelines).
 
-**v0.3.0 covers 100% of the public Picora API** (228 operations across 30+ namespaces), enforced in CI by a bidirectional OpenAPI coverage gate against the vendored contract snapshot in [`spec/openapi-public.json`](./spec/openapi-public.json).
+**v0.4.0 covers 100% of the public Picora API** (236 operations across 30+ namespaces), enforced in CI by a bidirectional OpenAPI coverage gate against the vendored contract snapshot in [`spec/openapi-public.json`](./spec/openapi-public.json).
 
 ```bash
 npm install @picora/sdk
@@ -74,6 +74,7 @@ Auth building blocks are exported for custom flows:
 | `videos`, `audio`, `media` | video (async transcode), audio, unified media list / batch delete |
 | `docs` | Markdown docs CRUD, raw content, `raw:batch`, revisions (list / get / restore) |
 | `kbs` | knowledge bases CRUD, sync (batch ops), manifest (ETag / 304), tree delete, conflicts |
+| `boards` | teaching boards (`.boardraw`, Excalidraw-compatible scene JSON): CRUD, raw scene, batch delete |
 | `collections`, `collectionTypes`, `episodes` | collections, episode CRUD + `episodes.sync` (idempotent asset sync) |
 | `aigc` | projects / episodes / contents / assets / batch jobs / templates / generate |
 | `aiTools`, `credit`, `agreements` | AI image toolkit, credit wallet, AIGC terms |

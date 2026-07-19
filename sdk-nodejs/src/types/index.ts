@@ -248,8 +248,19 @@ export type {
   ApiKey,
   CreateApiKeyInput,
   CreatedApiKey,
+  UpdateApiKeyInput,
+  UpdatedApiKey,
   ApiKeyToolConfigs,
 } from './api-keys.js'
+// v0.80.0:教学画板(.boardraw,Excalidraw 兼容场景 JSON)
+export type {
+  Board,
+  BoardListResult,
+  BoardListParams,
+  CreateBoardInput,
+  UpdateBoardInput,
+  BoardBatchDeleteResult,
+} from './boards.js'
 // v0.3.0 账户/平台域批次:自定义域名
 export type {
   CustomDomain,

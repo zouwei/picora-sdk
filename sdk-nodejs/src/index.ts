@@ -330,7 +330,16 @@ export type {
   ApiKey,
   CreateApiKeyInput,
   CreatedApiKey,
+  UpdateApiKeyInput,
+  UpdatedApiKey,
   ApiKeyToolConfigs,
+  // v0.80.0:教学画板(.boardraw)
+  Board,
+  BoardListResult,
+  BoardListParams,
+  CreateBoardInput,
+  UpdateBoardInput,
+  BoardBatchDeleteResult,
   // v0.3.0 账户/平台域批次:自定义域名
   CustomDomain,
   CreateDomainInput,
@@ -471,6 +480,7 @@ export type { AgreementsNamespace } from './resources/agreements.js'
 export type { AuthNamespace } from './resources/auth.js'
 export type { UserNamespace } from './resources/user.js'
 export type { ApiKeysNamespace } from './resources/api-keys.js'
+export type { BoardsNamespace } from './resources/boards.js'
 export type { DomainsNamespace } from './resources/domains.js'
 export type { SystemNamespace } from './resources/system.js'
 

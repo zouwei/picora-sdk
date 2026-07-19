@@ -83,6 +83,10 @@
       "description": "Markdown 文档资源：上传、列表、详情、全文、更新、删除（v0.15.0+）"
     },
     {
+      "name": "boards",
+      "description": "教学画板资源（.boardraw 场景文件）：上传、列表、详情、全文、更新、删除（v0.80.0+）"
+    },
+    {
       "name": "kb-conflicts",
       "description": "KB 冲突分支管理：创建分支、采纳、丢弃（v0.35+）"
     },
@@ -195,6 +199,29 @@
         "type": "http",
         "scheme": "bearer",
         "description": "API Key，格式为 `sk_live_` + 32位 nanoid。通过 `/v1/api-keys` 创建，用于工具端集成。"
+      },
+      "OAuth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 授权码 + PKCE。第三方 / 编辑器客户端（Moraya / Boardraw 等）通过授权页获得带 scope 的 access token（RS256 Bearer）。业务端点所需 scope 见每个操作的 `x-oauth-scope` 扩展；自 v0.79.x 起 observe-first 铺开（默认只记 `oauth.scope.denied` 日志），部署置 `OAUTH_SCOPE_ENFORCED=true` 后 scope 不足返回 403 `INSUFFICIENT_SCOPE`。第一方 JWT（BearerAuth）与 API Key（ApiKeyAuth）不参与 OAuth scope 体系。",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://api.picora.me/oauth/authorize",
+            "tokenUrl": "https://api.picora.me/oauth/token",
+            "scopes": {
+              "openid": "OIDC 身份标识",
+              "account.read": "读取账户基本信息 / 用量 / 订阅",
+              "media.read": "列表 / 详情 / 用量（图片·视频·音频）",
+              "media.write": "上传 / 修改媒体",
+              "media.delete": "删除媒体",
+              "kb.read": "读取知识库与文档",
+              "kb.write": "写入 / 同步 / 删除知识库文档",
+              "collection.read": "读取合集与剧集",
+              "collection.write": "创建 / 修改合集",
+              "collection.delete": "删除合集",
+              "episode.write": "写入 / 同步剧集"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -3302,6 +3329,85 @@
             "example": false
           }
         }
+      },
+      "BoardItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "filename",
+          "sizeBytes",
+          "elementCount",
+          "isPublic",
+          "tags",
+          "hasInlineContent",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 21,
+            "maxLength": 21,
+            "description": "画板唯一 ID（nanoid 21 字符）。",
+            "example": "V1StGXR8_Z5jdHi6B-myT"
+          },
+          "title": {
+            "type": "string",
+            "description": "画板标题（默认取文件名去 .boardraw 扩展名）。",
+            "example": "Lesson 3 board"
+          },
+          "filename": {
+            "type": "string",
+            "description": "上传时的原始文件名（含 .boardraw 扩展名）。",
+            "example": "lesson-3.boardraw"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "场景 JSON 字节数。",
+            "example": 2048
+          },
+          "elementCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "有效场景元素总数（rectangle / ellipse / line / arrow / text / freedraw / image 等合计，不含 isDeleted 软删除元素）。",
+            "example": 12
+          },
+          "isPublic": {
+            "type": "boolean",
+            "description": "画板是否公开可读（公开画板 `/v1/boards/:id/raw` 无需认证）。",
+            "example": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "标签列表（最多 10 个，每个 ≤32 字符）。",
+            "example": [
+              "math",
+              "physics"
+            ]
+          },
+          "hasInlineContent": {
+            "type": "boolean",
+            "description": "内容存储位置抽象：`true` 表示场景 JSON 内联直存（≤256KB），`false` 表示存储于 R2。调用方无需感知差异，统一用 `/v1/boards/:id/raw` 取全文。",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间（ISO 8601）。",
+            "example": "2026-07-12T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "最近更新时间（ISO 8601）。",
+            "example": "2026-07-12T08:00:00.000Z"
+          }
+        }
       }
     },
     "parameters": {
@@ -5644,7 +5750,8 @@
           }
         },
         "x-rate-limit-tier": "upload",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       },
       "get": {
         "summary": "List images",
@@ -5728,7 +5835,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       },
       "delete": {
         "summary": "Batch delete images",
@@ -5812,7 +5920,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "media.delete"
       }
     },
     "/v1/images/exists": {
@@ -5942,7 +6051,8 @@
           }
         },
         "x-rate-limit-tier": "upload",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       }
     },
     "/v1/images/batch-move": {
@@ -6037,7 +6147,8 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "x-oauth-scope": "media.write"
       }
     },
     "/v1/images/{id}": {
@@ -6095,7 +6206,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       },
       "patch": {
         "summary": "Update image metadata",
@@ -6187,7 +6299,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       },
       "delete": {
         "summary": "Delete an image",
@@ -6234,7 +6347,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "media.delete"
       }
     },
     "/v1/videos": {
@@ -6325,7 +6439,8 @@
           }
         },
         "x-rate-limit-tier": "upload",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       },
       "get": {
         "summary": "List videos",
@@ -6371,7 +6486,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       }
     },
     "/v1/videos/{id}/status": {
@@ -6482,7 +6598,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       }
     },
     "/v1/videos/{id}": {
@@ -6553,7 +6670,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       },
       "delete": {
         "summary": "Delete a video",
@@ -6597,7 +6715,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "media.delete"
       },
       "get": {
         "tags": [
@@ -6669,7 +6788,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       }
     },
     "/v1/user/me": {
@@ -6709,7 +6829,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       },
       "patch": {
         "summary": "Update user profile",
@@ -7011,7 +7132,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/user/me/doc-revisions": {
@@ -7172,7 +7294,8 @@
             "$ref": "#/components/responses/Unauthorized"
           }
         },
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/user/me/identities": {
@@ -7215,7 +7338,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/user/me/identities/{identityId}": {
@@ -7385,7 +7509,8 @@
             "$ref": "#/components/responses/RateLimit"
           }
         },
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       },
       "delete": {
         "summary": "Batch delete media",
@@ -7511,7 +7636,8 @@
             "$ref": "#/components/responses/RateLimit"
           }
         },
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "media.delete"
       }
     },
     "/v1/audio": {
@@ -7605,7 +7731,8 @@
             "$ref": "#/components/responses/RateLimit"
           }
         },
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       }
     },
     "/v1/audio/{id}": {
@@ -7662,7 +7789,8 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       },
       "patch": {
         "summary": "Update audio metadata",
@@ -7734,7 +7862,8 @@
             "description": "字段校验失败。"
           }
         },
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       },
       "delete": {
         "summary": "Delete audio",
@@ -7773,7 +7902,8 @@
             "$ref": "#/components/responses/NotFound"
           }
         },
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "media.delete"
       }
     },
     "/v1/api-keys": {
@@ -7915,6 +8045,100 @@
       }
     },
     "/v1/api-keys/{id}": {
+      "patch": {
+        "summary": "Update API key",
+        "description": "更新指定 API Key 的 name / description / scopes（至少提供一个字段）。变更 scopes 后鉴权缓存立即失效，新权限下次请求生效。",
+        "operationId": "updateApiKey",
+        "tags": [
+          "api-keys"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "API Key 记录 ID，从 `GET /v1/api-keys` 获取。",
+            "example": "abc123def456ghi789jkl"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "新名称。",
+                    "example": "PicGo 生产"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "新描述；传空串清空描述。",
+                    "example": "仅上传图片，用于 CI"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "description": "新的 v2 细粒度权限集合（至少 1 个）。",
+                    "example": [
+                      "media.read",
+                      "media.write"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功，返回更新后的 Key 元数据（不含明文）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write"
+      },
       "delete": {
         "summary": "Revoke API key",
         "description": "吊销并删除指定 API Key。吊销后立即生效：Key 写入吊销缓存（`revoked:{keyId}`），后续携带此 Key 的请求返回 401。",
@@ -8626,7 +8850,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "kb.write"
       },
       "get": {
         "summary": "List Knowledge Bases",
@@ -8704,7 +8929,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "kb.read"
       }
     },
     "/v1/kbs/{id}": {
@@ -8765,7 +8991,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "kb.read"
       },
       "patch": {
         "summary": "Update KB metadata",
@@ -8850,7 +9077,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "kb.write"
       },
       "delete": {
         "summary": "Delete a KB",
@@ -8930,7 +9158,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/kbs/{id}/manifest": {
@@ -9093,7 +9322,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "kb.read"
       }
     },
     "/v1/kbs/{id}/sync": {
@@ -9311,7 +9541,8 @@
           }
         },
         "x-rate-limit-tier": "sync",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/kbs/{id}/tree": {
@@ -9397,7 +9628,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/kbs/{id}/raw": {
@@ -9482,7 +9714,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "kb.read"
       }
     },
     "/v1/kbs/{id}/conflicts": {
@@ -9613,7 +9846,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "kb.read"
       },
       "post": {
         "summary": "显式创建冲突分支",
@@ -9761,7 +9995,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/kbs/{id}/conflicts/{branchId}/accept": {
@@ -9893,7 +10128,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/kbs/{id}/conflicts/{branchId}": {
@@ -10023,7 +10259,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "kb.write"
       }
     },
     "/v1/docs": {
@@ -11937,7 +12174,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/me/apps": {
@@ -12003,7 +12241,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/me/apps/{clientId}": {
@@ -13130,7 +13369,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
       }
     },
     "/v1/me/storage-tier/promote": {
@@ -14043,7 +14283,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "media.read"
       }
     },
     "/v1/images/{id}/public-meta": {
@@ -20413,7 +20654,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "collection.write"
       },
       "get": {
         "summary": "List collections",
@@ -20635,7 +20877,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       }
     },
     "/v1/collections/{id}": {
@@ -20786,7 +21029,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       },
       "patch": {
         "summary": "Update a collection",
@@ -20976,7 +21220,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "collection.write"
       },
       "delete": {
         "summary": "Delete a collection",
@@ -21050,7 +21295,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "collection.delete"
       }
     },
     "/v1/collections/{id}/manifest": {
@@ -21219,7 +21465,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       }
     },
     "/v1/collection-types": {
@@ -21326,7 +21573,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       },
       "post": {
         "summary": "Create a custom collection type",
@@ -21480,7 +21728,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "collection.write"
       }
     },
     "/v1/collection-types/{id}": {
@@ -21549,7 +21798,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "collection.delete"
       }
     },
     "/v1/collections/{collectionId}/episodes": {
@@ -21723,7 +21973,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "episode.write"
       },
       "get": {
         "summary": "List episodes",
@@ -21894,7 +22145,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       }
     },
     "/v1/collections/{collectionId}/episodes/{id}": {
@@ -22025,7 +22277,8 @@
           }
         },
         "x-rate-limit-tier": "read",
-        "x-required-scope": "read"
+        "x-required-scope": "read",
+        "x-oauth-scope": "collection.read"
       },
       "patch": {
         "summary": "Update an episode",
@@ -22197,7 +22450,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "episode.write"
       },
       "delete": {
         "summary": "Delete an episode",
@@ -22271,7 +22525,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write_delete"
+        "x-required-scope": "read_write_delete",
+        "x-oauth-scope": "collection.delete"
       }
     },
     "/v1/collections/{collectionId}/episodes/{id}/sync": {
@@ -22467,7 +22722,8 @@
           }
         },
         "x-rate-limit-tier": "mutation",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "episode.write"
       }
     },
     "/v1/aigc/assets": {
@@ -24283,7 +24539,8 @@
           }
         },
         "x-rate-limit-tier": "upload",
-        "x-required-scope": "read_write"
+        "x-required-scope": "read_write",
+        "x-oauth-scope": "media.write"
       }
     },
     "/v1/user/me/avatar": {
@@ -24560,6 +24817,808 @@
           }
         },
         "x-rate-limit-tier": "auth"
+      }
+    },
+    "/v1/boards": {
+      "post": {
+        "summary": "上传教学画板",
+        "description": "上传 `.boardraw` 教学画板文件——Excalidraw 兼容的场景 JSON（`{ type:'excalidraw', version:2, source, elements[], appState, files }`）。\n\n服务端仅做透明字节托管，不解析场景语义，仅统计 `elementCount`（不含 isDeleted 软删除元素）供列表展示；只读渲染由前端负责（scene JSON → 画板图形），服务端不产出 SVG/位图。内容大于 256KB 自动存储至 R2，否则直存数据库。\n\n**去重**：同一用户内容 sha256 相同时返回已有画板（HTTP 200，`data.duplicate=true`），不计入配额。",
+        "operationId": "createBoard",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "filename",
+                  "content"
+                ],
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "description": "文件名，必须以 `.boardraw` 结尾。",
+                    "example": "lesson-3.boardraw"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Excalidraw 兼容的场景 JSON 字符串。最大 5 MB。",
+                    "example": "{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://excalidraw.com\",\"elements\":[{\"id\":\"e1\",\"type\":\"rectangle\",\"x\":10,\"y\":10,\"width\":100,\"height\":60}],\"appState\":{\"viewBackgroundColor\":\"#ffffff\",\"gridSize\":20},\"files\":{}}"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "画板标题（缺省时取文件名去扩展名）。",
+                    "example": "Lesson 3 board"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 32
+                    },
+                    "maxItems": 10,
+                    "description": "标签列表（最多 10 个，每个 ≤32 字符）。",
+                    "example": [
+                      "math"
+                    ]
+                  },
+                  "isPublic": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "是否公开（公开画板 `/v1/boards/:id/raw` 无需认证）。",
+                    "example": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "内容重复，返回已有画板（`data.duplicate` 为 `true`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BoardItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "上传成功（新画板）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BoardItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "HTTP 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "upload",
+        "x-required-scope": "read_write"
+      },
+      "get": {
+        "summary": "列出教学画板",
+        "description": "游标分页列出当前用户的画板，按 `created_at` / `updated_at` 复合排序。支持标题模糊搜索、标签过滤、公开性过滤。",
+        "operationId": "listBoards",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "分页游标，由上一页响应的 `data.nextCursor` 返回。首次请求不传。",
+            "example": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "description": "单页数量（1-50，默认 20）。",
+            "example": 20
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "标题模糊匹配（仅扫 title 字段）。",
+            "example": "physics"
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "标签过滤，逗号分隔多值取 OR。",
+            "example": "math,physics"
+          },
+          {
+            "name": "isPublic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "按公开性过滤。",
+            "example": "false"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_desc",
+                "created_asc",
+                "updated_desc",
+                "updated_asc"
+              ],
+              "default": "created_desc"
+            },
+            "description": "排序方式。",
+            "example": "created_desc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "画板列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/BoardItem"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "下一页游标；`null` 表示已到末页。"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "HTTP 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "read",
+        "x-required-scope": "read"
+      },
+      "delete": {
+        "summary": "批量删除教学画板",
+        "description": "批量硬删除画板（单次最多 50 个）。逐个删除，部分失败不阻断其余，失败项列在 `data.failed`。删除同时清理 R2 对象、缓存并释放配额。",
+        "operationId": "batchDeleteBoards",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ids"
+                ],
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 21,
+                      "maxLength": 21
+                    },
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "description": "待删除画板 ID 列表（1-50 个）。"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "批量删除结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "failed": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "HTTP 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write_delete"
+      }
+    },
+    "/v1/boards/{id}/raw": {
+      "get": {
+        "summary": "获取画板场景全文（Excalidraw JSON）",
+        "description": "返回画板的场景 JSON 原文（`application/json`）。前端解析该 Excalidraw 兼容场景并渲染为画板图形；服务端不做渲染。\n\n**认证规则**：公开画板（`isPublic=true`）无需认证匿名可读；私有画板需 Bearer token 且为所有者，否则 404。\n\n**响应头**：`Cache-Control` 公开画板为 `public, max-age=300`，私有为 `no-store`。",
+        "operationId": "getBoardRaw",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 21,
+              "maxLength": 21
+            },
+            "description": "画板 ID（nanoid 21 字符）。",
+            "example": "V1StGXR8_Z5jdHi6B-myT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功，body 为场景 JSON 原文。",
+            "headers": {
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "`application/json; charset=utf-8`"
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "公开画板：`public, max-age=300`；私有画板：`no-store`"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://excalidraw.com\",\"elements\":[],\"appState\":{},\"files\":{}}"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "HTTP 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "read",
+        "x-required-scope": "read"
+      }
+    },
+    "/v1/boards/{id}": {
+      "get": {
+        "summary": "获取画板元数据",
+        "description": "返回画板元数据（不含场景内容）。私有画板需 Bearer token 且为所有者，否则 404。",
+        "operationId": "getBoard",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 21,
+              "maxLength": 21
+            },
+            "description": "画板 ID（nanoid 21 字符）。",
+            "example": "V1StGXR8_Z5jdHi6B-myT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "画板元数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BoardItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "HTTP 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "read",
+        "x-required-scope": "read"
+      },
+      "patch": {
+        "summary": "更新画板元数据",
+        "description": "更新画板的 `title` / `isPublic` / `tags`（至少提供一个字段）。**不更新场景内容**——内容变更走重新上传 + 删除旧画板。",
+        "operationId": "updateBoard",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 21,
+              "maxLength": 21
+            },
+            "description": "画板 ID（nanoid 21 字符）。",
+            "example": "V1StGXR8_Z5jdHi6B-myT"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "新标题。",
+                    "example": "Updated title"
+                  },
+                  "isPublic": {
+                    "type": "boolean",
+                    "description": "公开性开关。",
+                    "example": true
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 32
+                    },
+                    "maxItems": 10,
+                    "description": "覆盖标签列表。",
+                    "example": [
+                      "math"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的画板元数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BoardItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "HTTP 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "HTTP 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write"
+      },
+      "delete": {
+        "summary": "删除教学画板",
+        "description": "硬删除单个画板，同时清理 R2 对象、缓存并释放配额。仅所有者可删，否则 404。",
+        "operationId": "deleteBoard",
+        "tags": [
+          "boards"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 21,
+              "maxLength": 21
+            },
+            "description": "画板 ID（nanoid 21 字符）。",
+            "example": "V1StGXR8_Z5jdHi6B-myT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "HTTP 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "HTTP 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "HTTP 500",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write_delete"
       }
     }
   }

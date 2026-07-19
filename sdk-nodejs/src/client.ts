@@ -41,6 +41,7 @@ import { createCreditNamespace, type CreditNamespace } from './resources/credit.
 import { createAgreementsNamespace, type AgreementsNamespace } from './resources/agreements.js'
 import { createUserNamespace, type UserNamespace } from './resources/user.js'
 import { createApiKeysNamespace, type ApiKeysNamespace } from './resources/api-keys.js'
+import { createBoardsNamespace, type BoardsNamespace } from './resources/boards.js'
 import { createDomainsNamespace, type DomainsNamespace } from './resources/domains.js'
 import { createSystemNamespace, type SystemNamespace } from './resources/system.js'
 import { createBillingNamespace, type BillingNamespace } from './resources/billing.js'
@@ -181,6 +182,8 @@ export interface PicoraClient {
   readonly user: UserNamespace
   /** v0.3.0 账户域批次:API Key 管理(明文仅创建时返回一次)。 */
   readonly apiKeys: ApiKeysNamespace
+  /** v0.80.0:教学画板(.boardraw,Excalidraw 兼容场景 JSON)托管 CRUD + 全文读取。 */
+  readonly boards: BoardsNamespace
   /** v0.3.0 账户域批次:自定义外链域名(Pro+;create → CNAME → verify)。 */
   readonly domains: DomainsNamespace
   /** v0.3.0 账户域批次:系统健康检查(公开端点)。 */
@@ -250,6 +253,7 @@ export function createPicoraClient(options: PicoraClientOptions): PicoraClient {
     agreements: createAgreementsNamespace(http),
     user: createUserNamespace(http),
     apiKeys: createApiKeysNamespace(http),
+    boards: createBoardsNamespace(http),
     domains: createDomainsNamespace(http),
     system: createSystemNamespace(http),
     billing: createBillingNamespace(http),

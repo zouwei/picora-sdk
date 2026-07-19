@@ -33,6 +33,39 @@ export interface CreateApiKeyInput {
   name: string
 }
 
+/** PATCH /v1/api-keys/{id} 入参(至少提供一个字段) */
+export interface UpdateApiKeyInput {
+  /** 新名称(≤64 字符) */
+  name?: string
+  /** 新描述(≤200 字符);传空串清空描述 */
+  description?: string
+  /** 新的 v2 细粒度权限集合(至少 1 个),覆盖式替换 */
+  scopes?: KeyScopeV2[]
+}
+
+/**
+ * PATCH /v1/api-keys/{id} 响应数据(更新后的 Key 元数据)。
+ * 与列表项 ApiKey 的区别:含 description、不含 keyPrefix。
+ */
+export interface UpdatedApiKey {
+  /** API Key 记录 ID,nanoid 21 字符 */
+  id: string
+  /** Key 名称 */
+  name: string
+  /** Key 描述;null 表示无描述 */
+  description: string | null
+  /** v1 单值权限:read | read_write | read_write_delete */
+  scope: 'read' | 'read_write' | 'read_write_delete'
+  /** v2 细粒度权限集合 */
+  scopesV2: KeyScopeV2[]
+  /** 权限模型版本:1 = 仅 v1 scope;2 = 细粒度 scopesV2 生效 */
+  scopeVersion: 1 | 2
+  /** 最后一次使用时间(ISO 8601);null 表示从未使用 */
+  lastUsedAt: string | null
+  /** 创建时间(ISO 8601) */
+  createdAt: string
+}
+
 /**
  * POST /v1/api-keys 响应数据。
  *

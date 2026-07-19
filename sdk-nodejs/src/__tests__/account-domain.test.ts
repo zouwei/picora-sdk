@@ -8,7 +8,7 @@
  *   user(6):get 走 /v1/user/me、update 条件展开、uploadAvatar multipart
  *     无手动 Content-Type 专项、avatarOf raw Response 专项、clearDocRevisions、
  *     identities.unlink path 编码
- *   apiKeys(3):create 明文 key 返回断言、list 数组直返、update PATCH 条件展开
+ *   apiKeys(3):create 明文 key 返回断言、list 数组直返、update PATCH body 仅含传入字段
  *   domains(2):create body、verify POST 两段路径
  *   system(1,2 断言):health 走 GET /health 且 bare 模式不拆 data 包装
  */
@@ -291,6 +291,39 @@ describe('@picora/sdk 账户域 — apiKeys namespace', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/v1/api-keys')
     expect(keys).toHaveLength(1)
     expect(keys[0]?.keyPrefix).toBe('sk_live_xxxx')
+  })
+
+  it('K3: update 走 PATCH /v1/api-keys/{id},body 仅含传入字段,响应回填 description', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: true,
+        data: {
+          id: KEY_ID,
+          name: 'CI 上传',
+          description: '仅上传图片',
+          scope: 'read_write',
+          scopesV2: ['media.read', 'media.write'],
+          scopeVersion: 2,
+          lastUsedAt: null,
+          createdAt: '2026-07-19T00:00:00.000Z',
+        },
+      }),
+    )
+    const client = makeClient(fetchMock)
+    const updated = await client.apiKeys.update(KEY_ID, {
+      name: 'CI 上传',
+      scopes: ['media.read', 'media.write'],
+    })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(String(url)).toContain(`/v1/api-keys/${KEY_ID}`)
+    expect(init.method).toBe('PATCH')
+    // 仅传入字段进入 body(description 未传 → 不出现)
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: 'CI 上传',
+      scopes: ['media.read', 'media.write'],
+    })
+    expect(updated.description).toBe('仅上传图片')
+    expect(updated.scopeVersion).toBe(2)
   })
 
 })
