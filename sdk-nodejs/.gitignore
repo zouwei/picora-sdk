@@ -1,6 +1,7 @@
 node_modules/
 dist/
-coverage/
+# vitest 覆盖率产物目录(仅包根,勿误伤手写的 src/coverage/ 覆盖率登记表源码)
+/coverage/
 *.tgz
 .DS_Store
 .env
