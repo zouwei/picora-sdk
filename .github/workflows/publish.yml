@@ -1,16 +1,15 @@
 name: Publish @picora/sdk (sdk-nodejs)
 
-# 迁移自 picora-service/.github/workflows/publish-sdk.yml(v0.31 §4.9)。
-# 独立仓库后 tag 约定为 v<semver>(如 v0.3.0)。多语言容器仓库中 Node SDK 位于
-# sdk-nodejs/ 子目录;若将来 sdk-python 独立发版,另建 python-v* 触发的工作流。
-# main 分支不直接发包;必须先打 tag。
-# 前置(用户侧):仓库 Settings → Secrets 配置 NPM_TOKEN_PICORA_SDK。
-# 发版前本地执行 cd sdk-nodejs && pnpm spec:check --require 硬检契约快照新鲜度。
+# 推 v* tag 触发发布(正常路径);workflow_dispatch 允许手动跑一遍流水线
+# (若版本已发布则跳过 publish —— 见下方幂等守卫)。
+# 多语言容器仓库中 Node SDK 位于 sdk-nodejs/ 子目录;若将来 sdk-python 独立发版,
+# 另建 python-v* 触发的工作流。main 分支不直接发包;必须先打 tag。
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 defaults:
   run:
@@ -18,11 +17,15 @@ defaults:
 
 jobs:
   publish:
-    name: Build, test, and publish to npm with provenance
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write   # npm provenance 需要 OIDC 令牌
+      # npm Trusted Publishing(OIDC)所需:GitHub 签发短时签名身份令牌,npm 校验
+      # 其是否匹配包上配置的可信发布者 —— 无需 NPM_TOKEN,且对账户「发布需 OTP」
+      # 强制免疫(OIDC 发布不走 OTP)。这取代了 token 方案(总因
+      # `EOTP: This operation requires a one-time password` 失败)。
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -32,36 +35,85 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
+          node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: sdk-nodejs/pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
+      # Trusted Publishing + 自动 provenance 需要 npm >= 11.5.1。
+      # setup-node 随 Node 22 带的是 npm 10.x,需升级全局 npm。
+      # 固定到具体 11.x(非 npm@latest):避免自动升到有 provenance 回归的新大版本。
+      - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
+        run: npm install -g npm@11.18.0
+
+      - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Spec freshness (soft in CI; vendored snapshot is the CI source of truth)
+      # vendored 契约快照新鲜度(CI 中上游归档不可达则软通过,快照即事实源)
+      - name: Spec freshness
         run: pnpm spec:check
 
       - name: Type check
         run: pnpm run typecheck
 
-      - name: Run tests (includes openapi-coverage gate — release hard line)
+      # 覆盖率硬门禁在 openapi-coverage.test.ts 中(spec ↔ SDK 方法注册表双向)
+      - name: Test (includes OpenAPI coverage gate)
         run: pnpm test
 
       - name: Build
         run: pnpm run build
 
-      - name: Verify version matches tag
+      # 幂等:对已发布版本重跑(或本地已手动发布后再 dispatch)不能因
+      # EPUBLISHCONFLICT 硬失败。版本已在 npm 上则跳过 publish。
+      - name: Check if version is already published
+        id: pub
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::package.json version ($PKG_VERSION) does not match git tag ($TAG_VERSION)"
-            exit 1
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          if npm view "@picora/sdk@$VER" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@picora/sdk@$VER 已在 npm —— 跳过发布。"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to npm
+      # 经 OIDC 发布 —— 无 NODE_AUTH_TOKEN。用 `npm publish`(非 `pnpm publish`,
+      # 后者尚不支持 trusted publishing):因上方授予了 id-token: write 且 npm 上
+      # 该包配置了匹配的可信发布者,OIDC 令牌交换自动完成。
+      # `--provenance` 附带签名的构建来源证明(npm 显示「Published via GitHub Actions」)。
+      - name: Publish to npm (Trusted Publishing / OIDC)
+        if: steps.pub.outputs.already == 'false'
+        run: npm publish --access public --provenance
+
+  # npm 发布成功后为该 tag 建 GitHub Release,让仓库 Releases 页镜像 npm 版本历史。
+  # release notes 由上一个 tag 以来的提交自动生成。仅真实 tag 推送时运行。
+  github-release:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve version
+        id: v
+        run: echo "version=$(node -p "require('./sdk-nodejs/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: .
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: '@picora/sdk ${{ github.ref_name }}'
+          generate_release_notes: true
+          body: |
+            📦 **npm**: https://www.npmjs.com/package/@picora/sdk/v/${{ steps.v.outputs.version }}
+
+            ```bash
+            pnpm add @picora/sdk@^${{ steps.v.outputs.version }}
+            ```
+
+            Published via GitHub Actions with a signed SLSA provenance attestation.
+
+            ---
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_PICORA_SDK }}
-        run: pnpm publish --access public --provenance --no-git-checks
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

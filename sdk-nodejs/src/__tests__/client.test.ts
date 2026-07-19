@@ -5,6 +5,7 @@ import {
   PicoraNetworkError,
   PicoraRateLimitError,
 } from '../errors.js'
+import { SDK_VERSION } from '../version.js'
 import type { Image, PaginatedResponse, User } from '../types/index.js'
 
 /**
@@ -74,7 +75,8 @@ describe('createPicoraClient — request shaping', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = init.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer sk_live_test')
-    expect(headers['User-Agent']).toBe('MyApp/1.0 @picora/sdk/0.3.0')
+    // 从 SDK_VERSION 派生,避免每次版本升级都要手改断言
+    expect(headers['User-Agent']).toBe(`MyApp/1.0 @picora/sdk/${SDK_VERSION}`)
   })
 
   it('builds query string from list params and unwraps {data} envelope', async () => {

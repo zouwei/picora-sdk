@@ -7837,7 +7837,7 @@
                         "key": {
                           "type": "string",
                           "description": "API Key 明文，格式 sk_live_ + 32位 nanoid，仅此一次返回。",
-                          "example": "sk_live_YOUR_KEY_HERE"
+                          "example": "sk_live_Example_key_not_real_do_not_use0"
                         },
                         "createdAt": {
                           "type": "string",

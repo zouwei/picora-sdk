@@ -112,6 +112,50 @@ This package lives in the `sdk-nodejs/` directory of the multi-language [`picora
 
 Sync chain: `picora-service` (source of truth, `openapi:split`) → `picora-assets/docs/api/openapi.json` (contract distribution point) → this package (`pnpm spec:sync` copies from `../../picora-assets/docs/api/`, then implement / clean up and keep the gate green). Run `pnpm spec:check` before committing in the multi-repo workspace.
 
+## Releasing (maintainers)
+
+发布走 **本地打 tag → 推 GitHub → CI 经 OIDC 自动发 npm**。所有命令在 `sdk-nodejs/` 目录下执行。
+
+### 语义化升版
+
+`version:bump` 会**同时**更新 `package.json` 的 `version` 与 `src/version.ts` 的 `SDK_VERSION`(两者必须一致,否则 `version.test.ts` 报红):
+
+```bash
+pnpm version:bump patch         # 0.3.0 → 0.3.1
+pnpm version:bump minor         # 0.3.0 → 0.4.0
+pnpm version:bump major         # 0.3.0 → 1.0.0
+pnpm version:bump 0.5.0         # 直接设为指定版本(也接受 0.5.0-beta.1)
+```
+
+### 发布(正常路径:CI OIDC,免 OTP、无 NPM_TOKEN)
+
+```bash
+pnpm version:bump patch
+git add package.json src/version.ts && git commit -m "chore: release v0.3.1"
+git tag v0.3.1
+git push origin main --tags     # 推 tag → 触发 .github/workflows/publish.yml
+```
+
+推 `v*` tag 触发 CI:`spec:check` → typecheck → test(含 OpenAPI 覆盖率门禁)→ build →
+经 **GitHub OIDC Trusted Publishing** 发到 npm(`--provenance` 附签名来源证明),并自动建 GitHub Release。
+版本已在 npm 上则幂等跳过,不会因冲突失败。
+
+### 首次配置:npm Trusted Publishing(OIDC)
+
+首个版本需**手动发布**(包/可信发布者尚未建立):
+
+```bash
+pnpm test                       # 手动发布前先过门禁(prepublishOnly 也会再跑一遍)
+npm publish --access public     # 会提示输 OTP;本地发布不加 --provenance(其仅 CI/OIDC 支持)
+```
+
+随后到 npmjs.com 配置可信发布者,之后的 `v*` tag 即自动发布:
+
+1. 登录 npmjs.com → `@picora/sdk` 包 → **Settings → Trusted Publishing → Add publisher**
+2. 填:GitHub 仓库 `zouwei/picora-sdk`、工作流文件 `publish.yml`、环境留空
+3. 配好后任何 `v*` tag 推送都自动发布(2FA 免疫、无 token);配置前 CI 会因鉴权失败,
+   此时用上面的本地 `npm publish` 兜底。
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).

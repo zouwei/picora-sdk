@@ -93,7 +93,7 @@ export interface PicoraClientOptions {
   /** 自动重试 5xx / 网络错误。默认 true。 */
   retryOnServerError?: boolean
 
-  /** 用户代理;SDK 自动追加版本号,最终如 `MyApp/1.2 @picora/sdk/0.3.0`。 */
+  /** 用户代理;SDK 自动追加版本号,最终如 `MyApp/1.2 @picora/sdk/<version>`。 */
   userAgent?: string
 
   /** debug 日志;默认 false。 */
