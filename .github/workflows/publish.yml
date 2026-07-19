@@ -1,0 +1,67 @@
+name: Publish @picora/sdk (sdk-nodejs)
+
+# 迁移自 picora-service/.github/workflows/publish-sdk.yml(v0.31 §4.9)。
+# 独立仓库后 tag 约定为 v<semver>(如 v0.3.0)。多语言容器仓库中 Node SDK 位于
+# sdk-nodejs/ 子目录;若将来 sdk-python 独立发版,另建 python-v* 触发的工作流。
+# main 分支不直接发包;必须先打 tag。
+# 前置(用户侧):仓库 Settings → Secrets 配置 NPM_TOKEN_PICORA_SDK。
+# 发版前本地执行 cd sdk-nodejs && pnpm spec:check --require 硬检契约快照新鲜度。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+defaults:
+  run:
+    working-directory: sdk-nodejs
+
+jobs:
+  publish:
+    name: Build, test, and publish to npm with provenance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # npm provenance 需要 OIDC 令牌
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: 'pnpm'
+          cache-dependency-path: sdk-nodejs/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Spec freshness (soft in CI; vendored snapshot is the CI source of truth)
+        run: pnpm spec:check
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Run tests (includes openapi-coverage gate — release hard line)
+        run: pnpm test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Verify version matches tag
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) does not match git tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_PICORA_SDK }}
+        run: pnpm publish --access public --provenance --no-git-checks

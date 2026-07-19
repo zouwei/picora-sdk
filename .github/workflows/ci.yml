@@ -1,0 +1,56 @@
+name: CI (sdk-nodejs)
+
+# v0.3.0(v0.82.0 迭代):PR 阶段硬门禁。
+# 关键 step 是 vitest 中的 openapi-coverage.test.ts —— vendored 契约快照与
+# SDK 方法注册表双向比对(spec 有而 SDK 无 → 红;SDK 有而 spec 无 → 红)。
+# spec:check 在 CI 中因上游归档不可达自动软通过(vendored 快照即 CI 事实源),
+# 本地提交前请执行 pnpm spec:check 硬检新鲜度。
+#
+# 仓库为多语言 SDK 容器,各语言在独立子目录;本工作流仅覆盖 sdk-nodejs。
+
+on:
+  pull_request:
+    paths:
+      - 'sdk-nodejs/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sdk-nodejs/**'
+      - '.github/workflows/ci.yml'
+
+defaults:
+  run:
+    working-directory: sdk-nodejs
+
+jobs:
+  ci:
+    name: Typecheck, test (coverage gate), build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: sdk-nodejs/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Spec freshness (soft in CI)
+        run: pnpm spec:check
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Run tests (includes openapi-coverage gate)
+        run: pnpm test
+
+      - name: Build
+        run: pnpm run build
