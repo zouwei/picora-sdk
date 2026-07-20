@@ -1,46 +1,54 @@
 # picora-sdk (Rust)
 
-A Rust client for the [Picora](https://picora.me) API, scoped to what the Moraya desktop app
-(Tauri) needs — not a full port of the public API surface like the Node.js SDK.
+A Rust client for the [Picora](https://picora.me) API, scoped to what the
+[Moraya](https://moraya.app) desktop app (Tauri) needs. It collapses the
+`http_client` / `build_error` / `api_url` / `validate_*` helpers that were
+previously copy-pasted across the desktop's Picora command files into one
+reusable, tested crate.
 
-It collapses the `http_client` / `build_error` / `api_url` / `validate_*` helpers that were
-copy-pasted across the desktop's Picora command files into one reusable, tested crate. Every
-method returns [`PicoraError`], whose `Display` is the sanitized, user-facing message the
-desktop frontend already renders — so a Tauri command migrates with a plain
-`.map_err(|e| e.to_string())`.
+Part of the multi-language [`picora-sdk`](https://github.com/zouwei/picora-sdk)
+container repo (alongside `sdk-nodejs` / `sdk-python`).
 
 ## Install
 
+Consumed via a **git tag dependency** (not published to crates.io):
+
 ```toml
 [dependencies]
-picora-sdk = { git = "https://github.com/zouwei/picora-sdk", package = "picora-sdk" }
+picora-sdk = { git = "https://github.com/zouwei/picora-sdk", tag = "rust-v0.1.0" }
 ```
 
-Not yet published to crates.io — pull via git until the crate stabilizes.
+## Usage
 
-## Quickstart
-
-```rust,no_run
-# async fn demo() -> Result<(), picora_sdk::PicoraError> {
+```rust
 let client = picora_sdk::PicoraClient::new("https://api.picora.me", "sk_live_…")?;
+
+// Typed resource methods
 let kbs = client.kb_list().await?;
-# Ok(()) }
+let manifest = client.kb_manifest(&kb.id).await?;
+let revisions = client.doc_revisions(doc_id).await?;
+
+// Low-level escape hatch for bespoke endpoints (same auth + error pipeline)
+let usage: serde_json::Value =
+    client.http().send_json(client.get("/v1/user/me/usage"), "usage").await?;
 ```
+
+Every method returns `PicoraError`, whose `Display` is a sanitized, user-facing
+message (never leaks bearer tokens, `sk_live_` prefixes, or raw bodies) — so a
+Tauri command migrates with a plain `.map_err(|e| e.to_string())`.
 
 ## Scope
 
-Currently covers the Knowledge Base surface (`kb_list`, manifest, sync, raw) the desktop app
-consumes. Unlike `sdk-nodejs`, this crate does **not** track full public-API coverage in CI —
-resources are added as the desktop app needs them.
+PC-focused subset: knowledge bases (list/create/manifest/sync/raw), documents
+(revisions), user settings (doc-versioning / clear-revisions), plus the shared
+HTTP core + validators. Grows toward fuller parity as consumers need it.
 
-## Build & test
+## Releasing
 
-```bash
-cd sdk-rust
-cargo build
-cargo test
-```
+Push a `rust-v*` tag (matching `Cargo.toml`'s `version`); the
+`publish-rust.yml` workflow builds, tests, packages, and creates a GitHub
+Release with the `.crate` artifact.
 
 ## License
 
-Apache-2.0.
+Apache-2.0

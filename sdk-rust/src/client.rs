@@ -36,25 +36,52 @@ impl PicoraClient {
         })
     }
 
+    /// The shared HTTP core — exposed so consumers can drive bespoke endpoints
+    /// (`client.http().send_json(client.get(path), ctx)`) with the same
+    /// error-sanitizing pipeline as the typed methods.
+    pub fn http(&self) -> &HttpCore {
+        &self.http
+    }
+
     /// Join the base URL with a path (`api_url` from the desktop helpers).
-    pub(crate) fn url(&self, path: &str) -> String {
-        format!("{}/{}", self.base_url.trim_end_matches('/'), path.trim_start_matches('/'))
+    pub fn url(&self, path: &str) -> String {
+        format!(
+            "{}/{}",
+            self.base_url.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        )
     }
 
-    pub(crate) fn get(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http.reqwest().get(self.url(path)).bearer_auth(&self.token)
+    /// A bearer-authorized GET request builder for `path`.
+    pub fn get(&self, path: &str) -> reqwest::RequestBuilder {
+        self.http
+            .reqwest()
+            .get(self.url(path))
+            .bearer_auth(&self.token)
     }
 
-    pub(crate) fn post(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http.reqwest().post(self.url(path)).bearer_auth(&self.token)
+    /// A bearer-authorized POST request builder for `path`.
+    pub fn post(&self, path: &str) -> reqwest::RequestBuilder {
+        self.http
+            .reqwest()
+            .post(self.url(path))
+            .bearer_auth(&self.token)
     }
 
-    pub(crate) fn patch(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http.reqwest().patch(self.url(path)).bearer_auth(&self.token)
+    /// A bearer-authorized PATCH request builder for `path`.
+    pub fn patch(&self, path: &str) -> reqwest::RequestBuilder {
+        self.http
+            .reqwest()
+            .patch(self.url(path))
+            .bearer_auth(&self.token)
     }
 
-    pub(crate) fn delete(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http.reqwest().delete(self.url(path)).bearer_auth(&self.token)
+    /// A bearer-authorized DELETE request builder for `path`.
+    pub fn delete(&self, path: &str) -> reqwest::RequestBuilder {
+        self.http
+            .reqwest()
+            .delete(self.url(path))
+            .bearer_auth(&self.token)
     }
 }
 

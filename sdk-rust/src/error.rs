@@ -48,6 +48,7 @@ pub fn sanitize_status(status: u16, ctx: &str) -> String {
         401 | 403 => format!("Picora authentication failed ({ctx})"),
         402 => format!("Picora quota exceeded — upgrade your plan ({ctx})"),
         404 => format!("Picora resource not found ({ctx})"),
+        410 => format!("Picora resource is no longer available — it may have expired ({ctx})"),
         408 | 504 => format!("Picora request timed out ({ctx})"),
         409 => format!("Picora resource already exists ({ctx})"),
         422 => format!("Picora rejected request — validation failed ({ctx})"),
@@ -80,9 +81,15 @@ pub fn build_error_with_body(status: u16, body: &str, ctx: &str) -> String {
         .chars()
         .take(MAX_BODY_CHARS)
         .collect();
-    let cleaned = cleaned.replace("sk_live_", "sk_***_").replace("Bearer ", "Bearer ***");
+    let cleaned = cleaned
+        .replace("sk_live_", "sk_***_")
+        .replace("Bearer ", "Bearer ***");
     // Reclassify plan-limit 403s as quota (402) so they don't read as auth failures.
-    let effective_status = if status == 403 && body_is_plan_limit(&cleaned) { 402 } else { status };
+    let effective_status = if status == 403 && body_is_plan_limit(&cleaned) {
+        402
+    } else {
+        status
+    };
     if cleaned.is_empty() {
         sanitize_status(effective_status, ctx)
     } else {
@@ -104,7 +111,10 @@ mod tests {
 
     #[test]
     fn empty_body_falls_back_to_status_only() {
-        assert_eq!(build_error_with_body(404, "", "kb_raw"), "Picora resource not found (kb_raw)");
+        assert_eq!(
+            build_error_with_body(404, "", "kb_raw"),
+            "Picora resource not found (kb_raw)"
+        );
     }
 
     #[test]

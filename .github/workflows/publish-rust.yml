@@ -1,0 +1,86 @@
+name: Publish picora-sdk (sdk-rust)
+
+# Push a `rust-v*` tag to release the Rust SDK. This is kept separate from the
+# Node SDK's `v*` trigger (see publish.yml) per the container-repo convention:
+# each language SDK gets its own `<lang>-v*` tag + workflow.
+#
+# The crate is consumed via a GIT TAG DEPENDENCY (Moraya desktop's Cargo.toml),
+# NOT crates.io — so this workflow validates build + test, produces the
+# `cargo package` artifact, and cuts a GitHub Release with the `.crate` attached.
+# workflow_dispatch runs the pipeline without a tag (no Release created).
+
+on:
+  push:
+    tags:
+      - 'rust-v*'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: sdk-rust
+
+permissions:
+  contents: write # create the GitHub Release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sdk-rust
+
+      # The `rust-v0.1.0` tag must match Cargo.toml's `version = "0.1.0"`.
+      - name: Verify tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/rust-v')
+        run: |
+          CARGO_VER=$(grep -m1 '^version' Cargo.toml | sed -E 's/version *= *"([^"]+)".*/\1/')
+          TAG_VER="${GITHUB_REF_NAME#rust-v}"
+          echo "Cargo.toml=$CARGO_VER  tag=$TAG_VER"
+          if [ "$CARGO_VER" != "$TAG_VER" ]; then
+            echo "::error::Tag rust-v$TAG_VER does not match Cargo.toml version $CARGO_VER"
+            exit 1
+          fi
+
+      - name: Build (release)
+        run: cargo build --release --verbose
+
+      - name: Test
+        run: cargo test --verbose
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Produces target/package/picora-sdk-<version>.crate and re-verifies it
+      # compiles from the packaged sources (catches missing files / bad metadata).
+      - name: Package
+        run: cargo package
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/rust-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'picora-sdk (rust) ${{ github.ref_name }}'
+          generate_release_notes: true
+          files: sdk-rust/target/package/*.crate
+          body: |
+            Rust client SDK for the Picora API (PC-focused subset).
+
+            Consume via a git tag dependency (no crates.io):
+
+            ```toml
+            picora-sdk = { git = "https://github.com/zouwei/picora-sdk", tag = "${{ github.ref_name }}" }
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

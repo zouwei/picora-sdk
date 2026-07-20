@@ -27,4 +27,6 @@ pub use error::PicoraError;
 pub use validate::{validate_nanoid, validate_relative_path, MAX_RELATIVE_PATH_LEN};
 
 // Ergonomic root re-exports of resource types.
+pub use resources::docs::{Revision, RevisionContent, RevisionList};
 pub use resources::kbs::{ConflictEntry, Kb, ManifestEntry, SyncBatchResult, SyncOp};
+pub use resources::user::ClearRevisionsResult;

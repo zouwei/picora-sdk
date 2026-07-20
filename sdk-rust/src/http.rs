@@ -92,14 +92,23 @@ mod tests {
     #[test]
     fn extract_items_handles_three_shapes() {
         assert_eq!(extract_items(&json!([{ "id": 1 }])).len(), 1);
-        assert_eq!(extract_items(&json!({ "data": [{ "id": 1 }, { "id": 2 }] })).len(), 2);
-        assert_eq!(extract_items(&json!({ "data": { "items": [{ "id": 1 }] } })).len(), 1);
+        assert_eq!(
+            extract_items(&json!({ "data": [{ "id": 1 }, { "id": 2 }] })).len(),
+            2
+        );
+        assert_eq!(
+            extract_items(&json!({ "data": { "items": [{ "id": 1 }] } })).len(),
+            1
+        );
         assert_eq!(extract_items(&json!({ "data": { "nope": true } })).len(), 0);
     }
 
     #[test]
     fn unwrap_data_prefers_data_key() {
-        assert_eq!(unwrap_data(&json!({ "data": { "x": 1 } })), &json!({ "x": 1 }));
+        assert_eq!(
+            unwrap_data(&json!({ "data": { "x": 1 } })),
+            &json!({ "x": 1 })
+        );
         assert_eq!(unwrap_data(&json!({ "x": 1 })), &json!({ "x": 1 }));
     }
 }

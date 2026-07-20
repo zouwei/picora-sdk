@@ -95,7 +95,10 @@ impl PicoraClient {
         if let Some(s) = slug.filter(|s| !s.is_empty()) {
             body["slug"] = Value::String(s.to_string());
         }
-        let v: Value = self.http.send_json(self.post("/v1/kbs").json(&body), "kb_create").await?;
+        let v: Value = self
+            .http
+            .send_json(self.post("/v1/kbs").json(&body), "kb_create")
+            .await?;
         serde_json::from_value(unwrap_data(&v).clone()).map_err(|_| PicoraError::InvalidJson)
     }
 
@@ -120,13 +123,22 @@ impl PicoraClient {
         }
         let path = format!("/v1/kbs/{kb_id}/sync");
         let body = serde_json::json!({ "ops": ops });
-        let v: Value = self.http.send_json(self.post(&path).json(&body), "sync-batch").await?;
+        let v: Value = self
+            .http
+            .send_json(self.post(&path).json(&body), "sync-batch")
+            .await?;
         let data = unwrap_data(&v);
         Ok(SyncBatchResult {
-            applied: serde_json::from_value(data.get("applied").cloned().unwrap_or(Value::Array(vec![])))
-                .unwrap_or_default(),
-            conflicts: serde_json::from_value(data.get("conflicts").cloned().unwrap_or(Value::Array(vec![])))
-                .unwrap_or_default(),
+            applied: serde_json::from_value(
+                data.get("applied").cloned().unwrap_or(Value::Array(vec![])),
+            )
+            .unwrap_or_default(),
+            conflicts: serde_json::from_value(
+                data.get("conflicts")
+                    .cloned()
+                    .unwrap_or(Value::Array(vec![])),
+            )
+            .unwrap_or_default(),
         })
     }
 

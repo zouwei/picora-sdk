@@ -15,7 +15,9 @@ pub const MAX_RELATIVE_PATH_LEN: usize = 1024;
 ///   - does not contain `..` segments
 pub fn validate_relative_path(path: &str) -> Result<(), PicoraError> {
     if path.is_empty() {
-        return Err(PicoraError::Validation("Relative path must not be empty".into()));
+        return Err(PicoraError::Validation(
+            "Relative path must not be empty".into(),
+        ));
     }
     if path.len() > MAX_RELATIVE_PATH_LEN {
         return Err(PicoraError::Validation(format!(
@@ -23,14 +25,20 @@ pub fn validate_relative_path(path: &str) -> Result<(), PicoraError> {
         )));
     }
     if path.starts_with('/') {
-        return Err(PicoraError::Validation("Relative path must not start with '/'".into()));
+        return Err(PicoraError::Validation(
+            "Relative path must not start with '/'".into(),
+        ));
     }
     if path.contains('\\') {
-        return Err(PicoraError::Validation("Relative path must use forward slashes only".into()));
+        return Err(PicoraError::Validation(
+            "Relative path must use forward slashes only".into(),
+        ));
     }
     for segment in path.split('/') {
         if segment == ".." {
-            return Err(PicoraError::Validation("Relative path must not contain '..' segments".into()));
+            return Err(PicoraError::Validation(
+                "Relative path must not contain '..' segments".into(),
+            ));
         }
     }
     Ok(())
@@ -39,7 +47,11 @@ pub fn validate_relative_path(path: &str) -> Result<(), PicoraError> {
 /// Server ids are nanoid(21): alphanumeric plus `-` and `_`. Reject anything
 /// else before it reaches a URL path segment.
 pub fn validate_nanoid(id: &str, label: &str) -> Result<(), PicoraError> {
-    if id.len() != 21 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if id.len() != 21
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(PicoraError::Validation(format!("Invalid {label} format")));
     }
     Ok(())
