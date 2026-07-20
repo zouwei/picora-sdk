@@ -66,16 +66,6 @@ jobs:
       - name: Package
         run: cargo package
 
-      # Tag the artifact filename with the language so it's distinguishable from
-      # the Node/Python SDK release assets: picora-sdk-<ver>.crate -> picora-sdk-rust-<ver>.crate.
-      # Only the FILE is renamed — the crate package name stays `picora-sdk` so the
-      # git tag dependency (`picora-sdk = { git = ... }`) and `use picora_sdk` keep working.
-      - name: Tag artifact with language
-        run: |
-          VER=$(grep -m1 '^version' Cargo.toml | sed -E 's/version *= *"([^"]+)".*/\1/')
-          mv "target/package/picora-sdk-${VER}.crate" "target/package/picora-sdk-rust-${VER}.crate"
-          ls -l target/package/*.crate
-
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/rust-v')
         uses: softprops/action-gh-release@v2
