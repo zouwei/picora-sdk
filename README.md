@@ -6,7 +6,7 @@ This repository is a **multi-language container**: each language SDK lives in it
 
 | Directory | Package | Status |
 |---|---|---|
-| [`sdk-nodejs/`](./sdk-nodejs) | [`@picora/sdk`](https://www.npmjs.com/package/@picora/sdk) (npm) | ✅ Active — full public API coverage (228 operations) |
+| [`sdk-nodejs/`](./sdk-nodejs) | [`@picora/sdk`](https://www.npmjs.com/package/@picora/sdk) (npm) | ✅ Active — full public API coverage (236 operations, v0.4.0) |
 | [`sdk-python/`](./sdk-python) | `picora-sdk` (PyPI) | 🚧 Planned |
 | [`sdk-rust/`](./sdk-rust) | `picora-sdk` (git-only, not on crates.io yet) | 🧩 Scoped — Moraya desktop (Tauri) consumer subset, not tracked against the full public API |
 
