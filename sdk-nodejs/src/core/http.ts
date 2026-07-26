@@ -122,18 +122,24 @@ function buildHttpError(
     error?: unknown
     code?: unknown
     error_description?: unknown
+    error_reason?: unknown
     meta?: Record<string, unknown>
   }
   const rawError = typeof errBody.error === 'string' ? errBody.error : undefined
 
   let code: string
   let message: string
+  let meta = errBody.meta
   if (mode === 'bare') {
     // OAuth 形态:error 字段是机器码(invalid_grant 等)
     code = rawError ?? mapStatusToCode(status)
     message = typeof errBody.error_description === 'string'
       ? errBody.error_description
       : (rawError ?? `${status} ${statusText}`)
+    // Picora 扩展:透传 error_reason 到 meta,供 OAuth 会话据此区分终态原因(如重放吊销)
+    if (typeof errBody.error_reason === 'string') {
+      meta = { ...(meta ?? {}), error_reason: errBody.error_reason }
+    }
   } else {
     code = typeof errBody.code === 'string' ? errBody.code : mapStatusToCode(status)
     message = rawError ?? `${status} ${statusText}`
@@ -143,7 +149,7 @@ function buildHttpError(
     const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : 0
     return new PicoraRateLimitError(message, Number.isFinite(retryAfterSec) ? retryAfterSec : 0, requestId)
   }
-  return new PicoraApiError(status, code, message, errBody.meta, requestId)
+  return new PicoraApiError(status, code, message, meta, requestId)
 }
 
 async function executeOnce<TResult>(

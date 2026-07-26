@@ -65,15 +65,40 @@ export class PicoraRateLimitError extends PicoraApiError {
  * 捕获到本错误后,自动重试无意义 —— 消费者应引导用户重新走授权流程
  * (createAuthorizationRequest / startDeviceFlow / login)。
  */
+/**
+ * 重新授权原因(对齐 Picora 服务端 OAuth `error_reason` 扩展,v0.5.0)。
+ *
+ * 四个已知值**均意味着「refresh token 已终态失效 → 必须重新授权」**,差异仅用于面向用户的文案:
+ *   - `refresh_token_reuse`    已旋转/失效的 refresh 被再次使用 → 触发重放保护、整链吊销
+ *                              (**安全事件**;应提示用户「登录因安全原因已终止,可能被盗用,请重新登录」)
+ *   - `refresh_token_revoked`  该链被显式吊销(改密 / 登出全部 / 管理员)
+ *   - `refresh_token_expired`  refresh token 自然过期
+ *   - `refresh_token_invalid`  refresh token 不存在 / client 不匹配
+ *
+ * `(string & {})` 分支保留前向兼容:服务端未来可能新增值,消费者对**未知值一律按
+ * 「终态、需重新授权」处理**,仅在识别到具体值时定制文案。
+ */
+export type OAuthReauthReason =
+  | 'refresh_token_reuse'
+  | 'refresh_token_revoked'
+  | 'refresh_token_expired'
+  | 'refresh_token_invalid'
+  | (string & {})
+
 export class PicoraReauthRequiredError extends PicoraApiError {
-  constructor(message: string, cause?: unknown) {
-    super(
-      401,
-      'REAUTH_REQUIRED',
-      message,
-      cause instanceof Error ? { cause: cause.message } : undefined,
-    )
+  /**
+   * 机器可读的重新授权原因(对齐服务端 `error_reason`);服务端未提供时为 undefined。
+   * 消费者可据此定制文案(如 `refresh_token_reuse` → 安全告警),未知值按终态处理。
+   */
+  readonly reason?: OAuthReauthReason | undefined
+
+  constructor(message: string, cause?: unknown, reason?: OAuthReauthReason) {
+    const meta: Record<string, unknown> = {}
+    if (cause instanceof Error) meta.cause = cause.message
+    if (reason) meta.error_reason = reason
+    super(401, 'REAUTH_REQUIRED', message, Object.keys(meta).length > 0 ? meta : undefined)
     this.name = 'PicoraReauthRequiredError'
+    this.reason = reason
   }
 }
 

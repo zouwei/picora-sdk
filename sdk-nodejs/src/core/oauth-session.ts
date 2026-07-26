@@ -91,7 +91,16 @@ export class OAuthTokenProvider implements AuthProvider {
     } catch (err) {
       if (err instanceof PicoraApiError && err.code === 'invalid_grant') {
         await this.opts.storage.clear()
-        throw new PicoraReauthRequiredError('refresh token 已失效或被吊销(invalid_grant),请重新授权', err)
+        // 透传服务端 error_reason(如 refresh_token_reuse 安全重放)→ 消费者可据此定制文案
+        const reason = err.meta?.['error_reason']
+        const message = reason === 'refresh_token_reuse'
+          ? 'refresh token 触发重放保护,登录已因安全原因终止(可能被盗用),请重新授权'
+          : 'refresh token 已失效或被吊销(invalid_grant),请重新授权'
+        throw new PicoraReauthRequiredError(
+          message,
+          err,
+          typeof reason === 'string' ? reason : undefined,
+        )
       }
       throw err
     }

@@ -42,6 +42,7 @@ export {
   PicoraReauthRequiredError,
   isRetryable,
 } from './errors.js'
+export type { OAuthReauthReason } from './errors.js'
 
 export { SDK_VERSION } from './version.js'
 

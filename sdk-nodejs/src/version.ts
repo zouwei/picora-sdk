@@ -7,4 +7,4 @@
  *
  * 发版流程:改 package.json version → 同步改此常量 → git tag v{version}。
  */
-export const SDK_VERSION = '0.4.0'
+export const SDK_VERSION = '0.5.0'

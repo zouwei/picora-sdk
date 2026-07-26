@@ -123,6 +123,32 @@ describe('OAuthTokenProvider', () => {
     expect(await storage.get()).toBeNull()
   })
 
+  it('③b invalid_grant + error_reason=refresh_token_reuse → reason 透传到 PicoraReauthRequiredError', async () => {
+    const storage = new MemoryTokenStorage()
+    await storage.put(validToken({ expiresAt: nowSec() + 10 }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          error: 'invalid_grant',
+          error_reason: 'refresh_token_reuse',
+          error_description: 'Refresh token replay detected; all tokens revoked',
+        },
+        400,
+      ),
+    )
+    const provider = createOAuthTokenProvider({ clientId: 'app', storage, fetch: fetchMock })
+    // 只调一次:invalid_grant 会清空 storage,再调会走「空 storage」分支(无 reason)
+    const err = await provider.getAuthorization().then(
+      () => { throw new Error('should have rejected') },
+      (e: unknown) => e as PicoraReauthRequiredError,
+    )
+    expect(err).toBeInstanceOf(PicoraReauthRequiredError)
+    expect(err.reason).toBe('refresh_token_reuse')
+    // 安全事件文案应带「安全」语义,供消费者直接展示
+    expect(err.message).toMatch(/安全/)
+    expect(await storage.get()).toBeNull()
+  })
+
   it('empty storage → PicoraReauthRequiredError without network call', async () => {
     const storage = new MemoryTokenStorage()
     const fetchMock = vi.fn()

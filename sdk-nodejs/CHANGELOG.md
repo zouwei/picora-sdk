@@ -2,6 +2,27 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 与 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] — 2026-07-26
+
+跟进 picora-service **OAuth `error_reason` 扩展**：让消费者能明确感知登录被终止的**具体原因**（尤其区分「安全重放吊销」与「普通过期」），从而给用户对应引导，而非面对一个无法区分的 `invalid_grant`。
+
+### Added
+
+- **`OAuthReauthReason` 类型** + **`PicoraReauthRequiredError.reason` 属性**：OAuth 自动刷新会话在 refresh 失败抛出 `PicoraReauthRequiredError` 时，携带对齐服务端的机器可读子原因：
+  - `refresh_token_reuse` —— 已失效的 refresh 被再次使用，触发重放保护、整链吊销（**安全事件**）
+  - `refresh_token_revoked` / `refresh_token_expired` / `refresh_token_invalid`
+  - 类型含 `(string & {})` 前向兼容分支：**未知值一律按「终态、需重新授权」处理**
+  - 消费者可 `catch (e) { if (e instanceof PicoraReauthRequiredError && e.reason === 'refresh_token_reuse') …安全告警… }`
+- `refresh_token_reuse` 场景下 `PicoraReauthRequiredError.message` 带「安全」语义文案，可直接展示给用户
+
+### Changed
+
+- `createOAuthTokenProvider` 刷新遇 `invalid_grant` 时，从服务端响应的 `error_reason` 扩展字段解析原因并透传到 `PicoraReauthRequiredError.reason`（http core 在 `bare` 模式下将 `error_reason` 注入 `PicoraApiError.meta`）——纯附加，不影响既有「清空 storage + 抛终态错误」行为
+
+### Internal
+
+- 测试 274 → 275（新增 error_reason 透传用例）
+
 ## [0.4.0] — 2026-07-20
 
 跟进 picora-service **v0.80(教学画板 `.boardraw`)** 与 **v0.81(API Key 细粒度 scopes)** 两处契约新增,补齐 SDK 覆盖。vendored 契约 `spec/openapi-public.json` 由 228 → 236 operations,OpenAPI 覆盖率硬门禁重新对齐全量(零欠账)。
