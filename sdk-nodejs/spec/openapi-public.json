@@ -2464,6 +2464,7 @@
           "id",
           "title",
           "filename",
+          "format",
           "sizeBytes",
           "wordCount",
           "imageCount",
@@ -2494,6 +2495,15 @@
             "type": "string",
             "description": "上传时的原始文件名（含扩展名）。",
             "example": "welcome.md"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "typst"
+            ],
+            "description": "文档标记语言（v0.82.0+）。`markdown` = `.md`/`.markdown`；`typst` = `.typ`。历史文档按文件名扩展推导，恒有值。",
+            "example": "markdown"
           },
           "sizeBytes": {
             "type": "integer",
@@ -2658,6 +2668,17 @@
             "type": "string",
             "description": "错误详情文档链接。",
             "example": "https://picora.me/docs/oauth#errors"
+          },
+          "error_reason": {
+            "type": "string",
+            "enum": [
+              "refresh_token_reuse",
+              "refresh_token_revoked",
+              "refresh_token_expired",
+              "refresh_token_invalid"
+            ],
+            "description": "Picora 扩展（v0.83.0）：稳定的机器可读子原因，仅在 refresh_token 授权失败时出现，用于让客户端区分 `invalid_grant` 的具体终态并给用户对应引导。四值均意味着「refresh token 已终态失效 → 必须重新授权」，差异仅用于面向用户的文案：`refresh_token_reuse`=已旋转/失效的 refresh 被再次使用，触发重放保护、整链吊销（**安全事件**，应提示用户可能被盗用）；`refresh_token_revoked`=该链被显式吊销（改密/登出全部/管理员；预留值，当前与 reuse 同置 rotated_at 无法区分，均报 reuse）；`refresh_token_expired`=自然过期；`refresh_token_invalid`=不存在/client_id 不匹配。**客户端契约：未知值一律按「终态、需重新授权」处理**（前向兼容）。",
+            "example": "refresh_token_reuse"
           }
         }
       },
@@ -10266,7 +10287,7 @@
     "/v1/docs": {
       "post": {
         "summary": "上传 Markdown 文档",
-        "description": "上传 Markdown 文档，支持 frontmatter（标题、标签等）。\n\n**内嵌图片处理**：文档内的 base64 内嵌图片会被自动解码、上传到 Picora 媒体存储并改写为 CDN URL（`rewrittenCount` 反映成功改写数）。内容大于 256KB 自动存储至 R2，小于等于 256KB 直存数据库。\n\n**去重**：同一用户内容 sha256 相同时返回已有文档 ID（HTTP 200），不计入配额。\n\n**KB 绑定**：同时提供 `kbId` + `relativePath` 时写入 KB 命名空间，通过 `POST /v1/kbs/:id/sync` 是更推荐的批量写入方式。",
+        "description": "上传 Markdown 文档，支持 frontmatter（标题、标签等）。\n\n**内嵌图片处理**：文档内的 base64 内嵌图片会被自动解码、上传到 Picora 媒体存储并改写为 CDN URL（`rewrittenCount` 反映成功改写数）。内容大于 256KB 自动存储至 R2，小于等于 256KB 直存数据库。\n\n**去重**：同一用户内容 sha256 相同时返回已有文档 ID（HTTP 200），不计入配额。\n\n**KB 绑定**：同时提供 `kbId` + `relativePath` 时写入 KB 命名空间，通过 `POST /v1/kbs/:id/sync` 是更推荐的批量写入方式。\n\nv0.82.0：同一端点同时受理 Markdown（`.md`/`.markdown`）与 Typst（`.typ`）文档，由 filename 扩展名区分；Typst 跳过 markdown 图片改写 / frontmatter / 摘要 / 封面提取。",
         "operationId": "createDoc",
         "tags": [
           "docs"
@@ -10294,12 +10315,12 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255,
-                    "description": "文件名，必须以 `.md` 或 `.markdown` 结尾。",
-                    "example": "welcome.md"
+                    "description": "文档文件名，必须以 `.md` / `.markdown`（Markdown）或 `.typ`（Typst，v0.82.0+）结尾。扩展名决定文档的标记语言（format 字段）。",
+                    "example": "lecture.typ"
                   },
                   "content": {
                     "type": "string",
-                    "description": "Markdown 原文（含可选 YAML frontmatter）。最大 5 MB。",
+                    "description": "文档原文。Markdown 文档为 markdown 原文（含可选 frontmatter），服务端会识别内嵌 base64 图片并改写为 CDN URL；Typst 文档（`.typ`）为 Typst 源码，服务端**原样字节托管**，不做任何改写。",
                     "example": "# Hello World\n\nContent here."
                   },
                   "title": {
@@ -10493,8 +10514,8 @@
             "schema": {
               "type": "string"
             },
-            "description": "全文搜索关键词（匹配标题 / 标签）。",
-            "example": "welcome"
+            "description": "搜索关键词。匹配文档标题（title）、原始文件名（filename）与合集内相对路径（relativePath），任一命中即返回。注意 title 可能与文件名不同——上传时 title 取「显式参数 → frontmatter title → 首个 H1 → 文件名」。`%` 与 `_` 按字面量处理，非通配符。",
+            "example": "my-notes"
           },
           {
             "name": "tag",
@@ -11331,7 +11352,7 @@
     "/v1/docs/{id}/raw": {
       "get": {
         "summary": "获取文档全文（Markdown 原文）",
-        "description": "返回文档的 Markdown 原文（`text/markdown`）。\n\n**认证规则**：\n- 公开文档（`isPublic=true`）：无需认证，可匿名访问\n- 私有文档（`isPublic=false`）：需 Bearer token 且为所有者，否则 404\n\n**响应头**：`Cache-Control` 公开文档为 `public, max-age=300`；私有文档为 `no-store`。",
+        "description": "返回文档的 Markdown 原文（`text/markdown`）。\n\n**认证规则**：\n- 公开文档（`isPublic=true`）：无需认证，可匿名访问\n- 私有文档（`isPublic=false`）：需 Bearer token 且为所有者，否则 404\n\n**响应头**：`Cache-Control` 公开文档为 `public, max-age=300`；私有文档为 `no-store`。\n\nv0.82.0：响应 `Content-Type` 随文档 format 变化——Markdown 为 `text/markdown; charset=utf-8`，Typst 为 `text/typst; charset=utf-8`。",
         "operationId": "getDocRaw",
         "tags": [
           "docs"
@@ -11378,6 +11399,12 @@
                 "schema": {
                   "type": "string",
                   "example": "# Hello World\n\nContent here."
+                }
+              },
+              "text/typst": {
+                "schema": {
+                  "type": "string",
+                  "description": "Typst 源码原文（`.typ` 文档）"
                 }
               }
             }
@@ -25612,6 +25639,874 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write_delete"
+      }
+    },
+    "/v1/me/subscribe-code": {
+      "get": {
+        "summary": "Get my Xianyu subscribe code",
+        "description": "获取当前用户的咸鱼订阅码，没有则**惰性生成**并落库。\n\n用途：买家在咸鱼下单后把这串码发进聊天，talea 抽取后随实时发货请求交给我们认人，从而实现「下单即开通」，不必等买家自行兑换卡密。\n\n它是随机 bearer secret——能报出来就等于持有它，因此不受身份线索置信度门槛约束（邮箱可能被买家打错到别人头上，订阅码打错只会匹配不上）。\n\n惰性生成而非注册时预生成：绝大多数用户从不走咸鱼渠道。\n\nv0.85：附带 `updatedAt`（最后更新/轮换时间）与 `canRotateAt`（下次可轮换时间，10 分钟冷却），前端据此展示与禁用轮换按钮。",
+        "tags": [
+          "billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "订阅码（已有则返回既有值，不会每次变化）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "subscribeCode"
+                      ],
+                      "properties": {
+                        "subscribeCode": {
+                          "type": "string",
+                          "description": "咸鱼身份订阅码，格式 PU-XXXX-XXXX。字母表已排除易混字符（0/O/I/l/1）。",
+                          "example": "PU-7K3M-92XF"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "订阅码最后更新/轮换时间（ISO 8601）。存量未记时间戳的码为 null。",
+                          "example": "2026-08-13T08:33:42.453Z"
+                        },
+                        "canRotateAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "下次可轮换时间（ISO 8601）。null 表示当前即可轮换；否则须等到该时间（10 分钟冷却）。",
+                          "example": "2026-08-13T08:43:42.453Z"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "subscribeCode": "PU-7K3M-92XF",
+                    "updatedAt": "2026-08-13T08:33:42.453Z",
+                    "canRotateAt": "2026-08-13T08:43:42.453Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录。",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "订阅码生成失败。",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "read",
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
+      }
+    },
+    "/v1/me/subscribe-code/rotate": {
+      "post": {
+        "summary": "Rotate my Xianyu subscribe code",
+        "description": "重新生成订阅码，**旧码立即失效**。\n\n使用场景：用户把码贴到了公开场合，或怀疑已被他人获取。\n码本身即身份凭据，故直接覆盖、不做历史保留——保留旧码等于保留一把还能开门的钥匙。\n\n**老买家绑定不受影响**：talea 侧绑定锚点是 uid（subject_ref），不随订阅码变——轮换只让「新的首次识别」用新码，已绑定的老买家复购仍走 uid 确认（见 docs/ops/talea-identity-confirm.md）。\n\nv0.85 冷却：两次轮换间隔须 > 10 分钟，冷却期内返回 429。",
+        "tags": [
+          "billing"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "新的订阅码 + 更新时间 + 下次可轮换时间。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "subscribeCode"
+                      ],
+                      "properties": {
+                        "subscribeCode": {
+                          "type": "string",
+                          "description": "新订阅码，格式 PU-XXXX-XXXX。字母表已排除易混字符（0/O/I/l/1）。",
+                          "example": "PU-4RTV-8BNC"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "本次轮换时间（ISO 8601）。",
+                          "example": "2026-08-13T08:43:42.453Z"
+                        },
+                        "canRotateAt": {
+                          "type": "string",
+                          "description": "下次可轮换时间（ISO 8601）= 本次时间 + 10 分钟。",
+                          "example": "2026-08-13T08:53:42.453Z"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "subscribeCode": "PU-4RTV-8BNC",
+                    "updatedAt": "2026-08-13T08:43:42.453Z",
+                    "canRotateAt": "2026-08-13T08:53:42.453Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录。",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "轮换过于频繁（10 分钟冷却内重复轮换）。error 含剩余分钟数提示。",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "订阅码轮换过于频繁，请 8 分钟后再试"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write"
+      }
+    },
+    "/v1/me/devices/heartbeat": {
+      "post": {
+        "summary": "Send a device activation heartbeat",
+        "description": "自部署客户端（飞雁等）的激活心跳，**注册与复验合一**：首次见到的 `deviceId` 即注册，之后每次调用是复验，客户端无需分两步。建议每 12 小时调用一次。\n\n**为什么需要**：自部署服务每个实例各有独立数据库，授权数只能由账号所在方（Picora）计数——放在客户端本地，用户装两份就是两个库各数一台，限额直接归零。\n\n**首月体验期**：客户端首次用某账号激活某产品即自动获得 30 天全功能体验期，**不看账号有没有套餐**；`active` 取「套餐有效 OR 体验期内」的并集。权威锚点是该账号该产品最早的激活时间（含已淘汰设备行）——客户端本地锚点删库重装即可重置，故必须由服务端裁决。\n\n**副作用**：可用（套餐有效或体验期内）时会登记/刷新本设备；若登记后有效设备数超出套餐上限（`PLAN_LIMITS.device_count_limit`），按激活时间保留最新的若干台，其余打上淘汰标记（`quota_exceeded`），被淘汰者在**各自下次心跳**时得知。套餐无效**且**体验期已结束时**不登记**，直接返回 `active:false`。\n\n**`active` 与 `evicted` 刻意分开返回**：被淘汰时套餐仍然有效——只是这台不是被选中的那台。合成一个字段会让用户误以为套餐失效而去续费，钱花了问题还在。\n\n**已过期用户也可调用**（本路径在 plan-gate 豁免前缀内），由服务端回 `active:false` 让客户端自行降级停机。\n\n安全边界：`deviceId` 由客户端自报、**可被伪造**。本机制防的是「随手多装几台」，不是防有心绕过者（客户端开源），服务端不做设备指纹。",
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId",
+                  "product"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "description": "客户端生成的稳定标识（UUID），跨重启不变。同一台机器在同一 product 下只占一个名额。",
+                    "example": "9f2c1a3e-5d70-4c1b-9a2e-7b1f0c3d4e5f"
+                  },
+                  "product": {
+                    "type": "string",
+                    "enum": [
+                      "feiyan"
+                    ],
+                    "description": "产品标识。闭合枚举——若放开为任意字符串，客户端随便传个新值就能开出独立计数桶，限额形同虚设。",
+                    "example": "feiyan"
+                  },
+                  "version": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "description": "客户端版本，便于排障与统计。可选。",
+                    "example": "0.1.0"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "可读名，供用户在设备列表里认出是哪台机器。可选。",
+                    "example": "huzou@192.168.3.63"
+                  },
+                  "reclaim": {
+                    "type": "boolean",
+                    "description": "「夺回授权」信号，客户端应在**用户重新登录后的第一次心跳**带上。清除本机淘汰标记并把激活时间刷成当前，代价是顶掉当前最旧的一台。缺少此机制，被顶掉的机器将永远拿不回授权。",
+                    "example": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "判决结果。客户端据此决定继续服务、降级停机，或提示「授权已被其他设备顶替」。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "active",
+                        "plan",
+                        "planExpiresAt",
+                        "evicted",
+                        "evictedReason",
+                        "maxDevices",
+                        "activeDevices",
+                        "graceStartedAt",
+                        "graceEndsAt"
+                      ],
+                      "properties": {
+                        "active": {
+                          "type": "boolean",
+                          "description": "**是否可用 —— 并集判定**：`套餐有效 || 仍在首月体验期内`，谁宽松听谁的。false → 客户端应停机。\n\n注意它不等于「套餐有效」：体验期内套餐过期仍为 true。客户端要区分「靠体验期撑着」可比对 `plan` 与 `graceEndsAt`。",
+                          "example": true
+                        },
+                        "plan": {
+                          "type": "string",
+                          "description": "解析过期后的有效套餐。",
+                          "example": "trial"
+                        },
+                        "planExpiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true,
+                          "description": "套餐到期时间（ISO 8601）；null 表示不过期或无套餐。",
+                          "example": "2026-09-01T00:00:00.000Z"
+                        },
+                        "evicted": {
+                          "type": "boolean",
+                          "description": "这台是否已被淘汰。true → 客户端应停机并提示「授权已被其他设备顶替」，与套餐失效是两回事。",
+                          "example": false
+                        },
+                        "evictedReason": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "quota_exceeded",
+                            "user_revoked",
+                            "admin_revoked",
+                            null
+                          ],
+                          "description": "淘汰原因；未淘汰为 null。",
+                          "example": null
+                        },
+                        "maxDevices": {
+                          "type": "integer",
+                          "description": "当前允许的同时激活数（**套餐与体验期取较宽者**：体验期按 trial 档给 1 台，套餐更高则用套餐的）；-1 表示不限。",
+                          "example": 1
+                        },
+                        "activeDevices": {
+                          "type": "integer",
+                          "description": "该产品下当前有效设备数（含本次）。",
+                          "example": 1
+                        },
+                        "graceStartedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "首月体验期起点 = 该账号该产品**最早的 activated_at（含已淘汰行）**；从未激活过则为本次激活时间。\n\n含已淘汰行是关键：否则用户把旧设备全踢掉即可重置体验期，拿到无限个 30 天。",
+                          "example": "2026-08-15T10:00:00.000Z"
+                        },
+                        "graceEndsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "体验期结束时间 = graceStartedAt + 30 天（GRACE_PERIOD_DAYS）。由服务端算好下发，避免各客户端各自计算产生偏差。",
+                          "example": "2026-09-14T10:00:00.000Z"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录，或 token 无效 / 已吊销。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "缺少 `account.read` scope（OAuth token 且 scope 强制开启时）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求体校验失败：`deviceId` 缺失或长度不合法、`product` 不在枚举内、`label` 超长等。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "心跳过于频繁（限流 10 次/分钟）。正常 12 小时一次，触发通常意味着客户端重试逻辑异常。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端内部错误。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "mutation",
+        "x-required-scope": "read_write"
+      }
+    },
+    "/v1/me/devices": {
+      "get": {
+        "summary": "List my activated devices",
+        "description": "列出当前用户已登记的自部署设备。默认**只返回当前有效**的设备；`includeEvicted=true` 时一并返回已淘汰的——用户需要能看到「这台是什么时候、因为什么被顶掉的」。\n\n按激活时间倒序（最新的在前）。无副作用。",
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "includeEvicted",
+            "in": "query",
+            "required": false,
+            "description": "是否包含已淘汰设备。传字符串 `true` 时包含；缺省或其他值只返回有效设备。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "example": "true"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "设备列表 + 当前套餐允许的同时激活数。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "maxDevices",
+                        "devices"
+                      ],
+                      "properties": {
+                        "maxDevices": {
+                          "type": "integer",
+                          "description": "当前套餐允许的同时激活数；-1 表示不限。",
+                          "example": 3
+                        },
+                        "devices": {
+                          "type": "array",
+                          "description": "设备列表，按激活时间倒序。",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "deviceId",
+                              "product",
+                              "label",
+                              "version",
+                              "activatedAt",
+                              "lastSeenAt",
+                              "evictedAt",
+                              "evictedReason"
+                            ],
+                            "properties": {
+                              "deviceId": {
+                                "type": "string",
+                                "description": "客户端自报的稳定标识（UUID），跨重启不变。由客户端生成，服务端不做设备指纹。",
+                                "example": "9f2c1a3e-5d70-4c1b-9a2e-7b1f0c3d4e5f"
+                              },
+                              "product": {
+                                "type": "string",
+                                "enum": [
+                                  "feiyan"
+                                ],
+                                "description": "产品标识。闭合枚举，新增产品需服务端同步放开。",
+                                "example": "feiyan"
+                              },
+                              "label": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "客户端自报的可读名，供用户在列表里认出是哪台机器；未上报为 null。",
+                                "example": "huzou@192.168.3.63"
+                              },
+                              "version": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "客户端版本，便于排障与统计；未上报为 null。",
+                                "example": "0.1.0"
+                              },
+                              "activatedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "本次激活时间（ISO 8601）。超额淘汰时保留该值最新的若干台；「夺回授权」会把它刷成当前时间。",
+                                "example": "2026-08-15T08:00:00.000Z"
+                              },
+                              "lastSeenAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "最近一次心跳时间（ISO 8601），界面显示「最近活跃」。",
+                                "example": "2026-08-15T20:00:00.000Z"
+                              },
+                              "evictedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "nullable": true,
+                                "description": "被淘汰时间（ISO 8601）；null 表示当前有效。",
+                                "example": null
+                              },
+                              "evictedReason": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "quota_exceeded",
+                                  "user_revoked",
+                                  "admin_revoked",
+                                  null
+                                ],
+                                "description": "淘汰原因：quota_exceeded=超出套餐设备数被顶替 / user_revoked=用户主动踢出 / admin_revoked=管理员操作；null 表示未淘汰。",
+                                "example": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录，或 token 无效 / 已吊销。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "缺少 `account.read` scope（OAuth token 且 scope 强制开启时）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "查询参数校验失败。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端内部错误。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-tier": "read",
+        "x-required-scope": "read",
+        "x-oauth-scope": "account.read"
+      }
+    },
+    "/v1/me/devices/{deviceId}": {
+      "delete": {
+        "summary": "Revoke one of my devices",
+        "description": "主动踢出一台设备——设备数满了时的自助出路（否则用户只能挨个跑到每台机器上退出登录）。\n\n**副作用**：给该设备打上 `user_revoked` 淘汰标记。**不吊销该设备的 OAuth token**：第一方 client 在 `oauth_clients` 中是全局单行，同一用户的所有实例共享同一个 `client_id`，按它吊销会一次吊掉该用户**全部**实例而非被踢的这台。被踢实例最迟在下次心跳（12 小时）得知并自行停机，客户端侧另有硬失效兜底。\n\n幂等：对已淘汰的设备重复调用同样返回成功。",
+        "tags": [
+          "me"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "要踢出的设备标识，取自 `GET /v1/me/devices` 返回的 `devices[].deviceId`。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "9f2c1a3e-5d70-4c1b-9a2e-7b1f0c3d4e5f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已踢出（或该设备本就处于已淘汰状态）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "无返回数据，固定为 null。",
+                      "example": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录，或 token 无效 / 已吊销。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "缺少 `account.read` scope（OAuth token 且 scope 强制开启时）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "该 deviceId 不存在，或不属于当前用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端内部错误。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "人类可读错误描述（按 Accept-Language 本地化）。",
+                      "example": "Unauthorized"
+                    }
+                  }
                 }
               }
             }

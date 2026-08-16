@@ -128,3 +128,18 @@ export interface BillingHistoryItem {
   /** 支付时间(ISO 8601) */
   createdAt: string
 }
+
+/**
+ * 咸鱼专属订阅码（v0.85）。
+ *
+ * 买家把 `subscribeCode` 发进咸鱼聊天，收单中台据此认人并自动开通订阅。
+ * 它是随机 bearer secret——能报出来即视为持有者，故请勿公开张贴。
+ */
+export interface SubscribeCodeResult {
+  /** 订阅码明文，形如 `PU-7K3M-92XF`（字母表已排除 0/O/I/l/1 等易混字符） */
+  subscribeCode: string
+  /** 最后一次生成/轮换时间（ISO 8601）；存量未记时间戳的码为 null */
+  updatedAt: string | null
+  /** 下次可轮换时间（ISO 8601，10 分钟冷却）；null 表示当前即可轮换 */
+  canRotateAt: string | null
+}

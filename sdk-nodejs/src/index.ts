@@ -487,6 +487,7 @@ export type { SystemNamespace } from './resources/system.js'
 
 // v0.3.0 平台域批次(第 5 批,台账清零):新命名空间接口类型
 export type { BillingNamespace } from './resources/billing.js'
+export type { DevicesNamespace } from './resources/devices.js'
 export type { CampaignsNamespace } from './resources/campaigns.js'
 export type { NotificationsNamespace } from './resources/notifications.js'
 export type { TicketsNamespace } from './resources/tickets.js'

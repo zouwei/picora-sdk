@@ -17,6 +17,7 @@ import type {
   ActivateInviteCodeInput,
   ActivateInviteCodeResult,
   BillingHistoryItem,
+  SubscribeCodeResult,
   BillingOrder,
   BillingPlans,
   BillingSubscription,
@@ -53,6 +54,21 @@ export interface BillingNamespace {
   orders(): Promise<BillingOrder[]>
   /** 获取当前用户支付历史记录(按时间降序)。 */
   history(): Promise<BillingHistoryItem[]>
+  /**
+   * 获取当前用户的咸鱼专属订阅码(v0.85)。**惰性生成**:首次调用即生成并落库,
+   * 之后返回同一个值(轮换才会变)。
+   *
+   * 用途:买家在咸鱼下单后把这串码发进聊天,收单中台据此认人并自动开通,
+   * 不必等买家自行兑换卡密。它是随机 bearer secret——能报出来即视为持有者。
+   */
+  subscribeCode(): Promise<SubscribeCodeResult>
+  /**
+   * 轮换订阅码(v0.85):旧码**立即失效**,用于码被贴到公开场合或疑似泄露时。
+   *
+   * 已绑定的老买家不受影响——收单侧的绑定锚点是用户 id,不随码变。
+   * 冷却 10 分钟 + 限流 5 次/分钟,过快调用抛 429(`PicoraRateLimitError`)。
+   */
+  rotateSubscribeCode(): Promise<SubscribeCodeResult>
 }
 
 export function createBillingNamespace(http: HttpCore): BillingNamespace {
@@ -88,6 +104,15 @@ export function createBillingNamespace(http: HttpCore): BillingNamespace {
     orders: () => http.request<BillingOrder[]>({ method: 'GET', path: '/v1/billing/orders' }),
     history: () =>
       http.request<BillingHistoryItem[]>({ method: 'GET', path: '/v1/billing/history' }),
+    subscribeCode: () =>
+      http.request<SubscribeCodeResult>({ method: 'GET', path: '/v1/me/subscribe-code' }),
+    rotateSubscribeCode: () =>
+      http.request<SubscribeCodeResult>({
+        method: 'POST',
+        path: '/v1/me/subscribe-code/rotate',
+        // 轮换是破坏性且有冷却的操作,自动重试只会撞 429 并放大冷却困惑
+        retry: false,
+      }),
   }
 }
 
@@ -99,4 +124,6 @@ export const BILLING_COVERAGE = [
   { method: 'GET', path: '/v1/billing/subscription', client: 'billing.subscription' },
   { method: 'GET', path: '/v1/billing/orders', client: 'billing.orders' },
   { method: 'GET', path: '/v1/billing/history', client: 'billing.history' },
+  { method: 'GET', path: '/v1/me/subscribe-code', client: 'billing.subscribeCode' },
+  { method: 'POST', path: '/v1/me/subscribe-code/rotate', client: 'billing.rotateSubscribeCode' },
 ] as const satisfies readonly CoveredOperation[]

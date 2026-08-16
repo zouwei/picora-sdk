@@ -34,6 +34,7 @@ import { BOARDS_COVERAGE } from '../resources/boards.js'
 import { DOMAINS_COVERAGE } from '../resources/domains.js'
 import { SYSTEM_COVERAGE } from '../resources/system.js'
 import { BILLING_COVERAGE } from '../resources/billing.js'
+import { DEVICES_COVERAGE } from '../resources/devices.js'
 import { CAMPAIGNS_COVERAGE } from '../resources/campaigns.js'
 import { NOTIFICATIONS_COVERAGE } from '../resources/notifications.js'
 import { TICKETS_COVERAGE } from '../resources/tickets.js'
@@ -83,6 +84,8 @@ export const COVERAGE_MANIFEST: readonly CoveredOperation[] = [
   ...SYSTEM_COVERAGE,
   // v0.3.0 平台域批次(第 5 批,台账清零)
   ...BILLING_COVERAGE,
+  // v0.86.0：设备激活注册表
+  ...DEVICES_COVERAGE,
   ...CAMPAIGNS_COVERAGE,
   ...NOTIFICATIONS_COVERAGE,
   ...TICKETS_COVERAGE,

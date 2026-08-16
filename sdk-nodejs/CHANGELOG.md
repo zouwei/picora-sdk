@@ -2,6 +2,31 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 与 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] — 2026-08-16
+
+跟进 picora-service **v0.85（咸鱼订阅码）** 与 **v0.86（设备激活注册表 + 首月体验期）**。
+vendored 契约 236 → 241 operations，覆盖率硬门禁重新对齐全量。
+
+### Added
+
+- **`devices` 命名空间**（v0.86，自部署客户端授权数限制）—— 3 方法：
+  - `heartbeat()` 注册与复验合一（建议 12 小时一次），返回 `active` / `evicted` **两个独立信号**：
+    `active:false` = 套餐失效且体验期已过，应停机引导续费；`evicted:true` = 套餐仍有效但这台被顶替，
+    应提示「重新登录以夺回」。合成一个信号会让用户误以为要续费，钱花了问题还在
+  - `list({ includeEvicted })` 设备列表；`revoke(deviceId)` 主动踢出（幂等）
+  - `heartbeat` 支持 `reclaim: true`（用户重新登录后首次心跳带上）——缺了它被顶掉的机器永远拿不回授权
+  - 响应含 `graceStartedAt` / `graceEndsAt`：首次激活起 30 天体验期，`active` 取
+    「套餐有效 ∪ 体验期内」；锚点含已淘汰设备，故踢光设备也不会重置
+  - 新增类型 `Device` / `DeviceProduct` / `DeviceEvictReason` / `DeviceHeartbeatInput` /
+    `DeviceHeartbeatResult` / `DeviceListResult`
+- **`billing.subscribeCode()` / `billing.rotateSubscribeCode()`**（v0.85，此前遗漏未补）——
+  咸鱼专属订阅码的读取与轮换；轮换关闭自动重试（破坏性且有 10 分钟冷却，重试只会撞 429）；
+  新增类型 `SubscribeCodeResult`
+
+### Internal
+
+- 测试 274 → 275；覆盖率门禁随 241 operations 全量绿
+
 ## [0.5.0] — 2026-07-26
 
 跟进 picora-service **OAuth `error_reason` 扩展**：让消费者能明确感知登录被终止的**具体原因**（尤其区分「安全重放吊销」与「普通过期」），从而给用户对应引导，而非面对一个无法区分的 `invalid_grant`。

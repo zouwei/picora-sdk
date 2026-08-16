@@ -284,7 +284,17 @@ export type {
   BillingSubscription,
   BillingOrder,
   BillingHistoryItem,
+  SubscribeCodeResult,
 } from './billing.js'
+// v0.86.0：自部署客户端设备激活注册表
+export type {
+  DeviceProduct,
+  DeviceEvictReason,
+  DeviceHeartbeatInput,
+  DeviceHeartbeatResult,
+  Device,
+  DeviceListResult,
+} from './devices.js'
 // v0.3.0 平台域批次:campaigns / notifications / tickets / insights
 export type {
   CampaignBanner,

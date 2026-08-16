@@ -45,6 +45,7 @@ import { createBoardsNamespace, type BoardsNamespace } from './resources/boards.
 import { createDomainsNamespace, type DomainsNamespace } from './resources/domains.js'
 import { createSystemNamespace, type SystemNamespace } from './resources/system.js'
 import { createBillingNamespace, type BillingNamespace } from './resources/billing.js'
+import { createDevicesNamespace, type DevicesNamespace } from './resources/devices.js'
 import { createCampaignsNamespace, type CampaignsNamespace } from './resources/campaigns.js'
 import {
   createNotificationsNamespace,
@@ -190,6 +191,8 @@ export interface PicoraClient {
   readonly system: SystemNamespace
   /** v0.3.0 平台域批次:套餐定价 / checkout / 邀请码激活 / 订阅 / 订单 / 支付历史。 */
   readonly billing: BillingNamespace
+  /** v0.86.0：自部署客户端设备激活注册表(心跳 / 列表 / 踢出)。 */
+  readonly devices: DevicesNamespace
   /** v0.3.0 平台域批次(v0.66):促销活动查询 / 私有券领取 / 促销码校验。 */
   readonly campaigns: CampaignsNamespace
   /** v0.3.0 平台域批次(v0.66):站内信(列表 / 未读计数 / 批量已读)。 */
@@ -257,6 +260,7 @@ export function createPicoraClient(options: PicoraClientOptions): PicoraClient {
     domains: createDomainsNamespace(http),
     system: createSystemNamespace(http),
     billing: createBillingNamespace(http),
+    devices: createDevicesNamespace(http),
     campaigns: createCampaignsNamespace(http),
     notifications: createNotificationsNamespace(http),
     tickets: createTicketsNamespace(http),
