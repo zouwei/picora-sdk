@@ -7,7 +7,7 @@
  *   - --require                          → 源必须可达,不可达即失败(本地发版前用)
  *
  * 说明:picora-sdk 与 picora-service/picora-assets 的 CI 互不可达,vendored 快照
- * 即 CI 中的事实源;跨仓新鲜度靠本脚本(本地流程)+ CLAUDE.md 三段式同步链规范约束。
+ * 即 CI 中的事实源;跨仓新鲜度靠本脚本(本地流程)+ AGENTS.md 三段式同步链规范约束。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

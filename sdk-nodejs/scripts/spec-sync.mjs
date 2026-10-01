@@ -2,7 +2,7 @@
  * spec:sync — 三段式契约同步链第 [3] 段:从 picora-assets 契约归档拉取公开契约,
  * 更新本仓库 vendored 快照 spec/openapi-public.json,并写 spec/SOURCE.md 记录来源。
  *
- * 同步链全貌(见 picora-assets/CLAUDE.md §4.4):
+ * 同步链全貌(见 picora-assets/AGENTS.md §4.4):
  *   [1] picora-service  apps/api/openapi.json(单一事实源)→ pnpm openapi:split
  *   [2] picora-assets   docs/api/openapi.json(公开契约归档,= openapi-public 内容)
  *   [3] picora-sdk      spec/openapi-public.json(vendored 快照,本脚本维护)
